@@ -1,5 +1,6 @@
 import { HealthStatus } from './components/HealthStatus';
 import { AuthCard } from './components/AuthCard';
+import { MovieCatalog } from './components/MovieCatalog';
 
 export default function App() {
   return (
@@ -16,7 +17,7 @@ export default function App() {
                 SeatForge
               </span>
               <span className="hidden sm:inline-block ml-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-indigo-950 text-indigo-400 border border-indigo-800/60">
-                M03 Authentication
+                M04 Basic CRUD
               </span>
             </div>
           </div>
@@ -24,7 +25,7 @@ export default function App() {
           <div className="flex items-center space-x-4 text-xs text-slate-400">
             <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/60 border border-slate-700/50">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              JWT & DB Active
+              Catalog & Shows Active
             </span>
             <span className="font-mono text-slate-400">v1.0.0</span>
           </div>
@@ -55,6 +56,11 @@ export default function App() {
         <section className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-12">
           <HealthStatus />
           <AuthCard />
+        </section>
+
+        {/* Interactive Movies Catalog & Seat Layout (M04) */}
+        <section className="w-full max-w-5xl flex justify-center mb-12">
+          <MovieCatalog />
         </section>
 
         {/* Architectural Pillars */}

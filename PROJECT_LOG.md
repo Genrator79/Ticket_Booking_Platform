@@ -57,20 +57,19 @@
     - `008_create_payments_table.sql`: Payments records linked to bookings with idempotency key support.
   - Implemented migration runner `database/migrate.ts` with version tracking in `schema_migrations` and idempotent execution.
 
-### 2026-10-29 - Milestone M03: Authentication Implementation & Verification
-- **Milestone & Task**: M03 — Authentication / Security Architecture & Full-Stack Integration
+### 2026-10-29 - Milestone M04: Basic CRUD & Show Management Completed
+- **Milestone & Task**: M04 — Basic CRUD / Movies, Venues, Screens, Shows, and Seat Layout
 - **Action**:
-  - Installed `jsonwebtoken` and `@types/jsonwebtoken` in `server/`.
-  - Configured JWT environment variables (`JWT_SECRET`, `JWT_EXPIRES_IN`) in `server/src/config/env.ts` and `server/.env`.
-  - Implemented custom error hierarchy in `server/src/utils/errors.ts` (`AppHttpError`, `BadRequestError`, `UnauthorizedError`, `ConflictError`).
-  - Created `UserRepository` in `server/src/repositories/user.repository.ts` with parameterized SQL queries for `findByEmail`, `findById`, and `create`.
-  - Created `AuthService` in `server/src/services/auth.service.ts` managing bcrypt password hashing (10 salt rounds), JWT signing and validation, and `SafeUser` representation stripping `password_hash`.
-  - Created Zod validation schemas (`registerSchema`, `loginSchema`) in `server/src/validations/auth.validation.ts` and generic body validation middleware in `server/src/middleware/validate.ts`.
-  - Implemented JWT authentication middleware (`authenticate`) and role checking (`requireRole`) in `server/src/middleware/auth.middleware.ts`, augmenting `Express.Request` types with `AuthTokenPayload`.
-  - Implemented `AuthController` (`register`, `login`, `getMe`) and routed `/api/auth` under `server/src/routes/auth.routes.ts`.
-  - Created automated test suite `server/tests/auth.test.ts` verifying password hashing with bcrypt, duplicate email conflicts (409), input validation (400), valid/invalid/case-insensitive login (200/401), protected `/api/auth/me` verification with Bearer tokens, and unauthorized rejections (401).
-  - Implemented frontend types (`client/src/types/auth.ts`) and `authService` (`client/src/services/authService.ts`) with session persistence.
-  - Implemented `client/src/components/AuthCard.tsx` with tabs for Login and Register, demo credential pre-fills (`john@example.com`, `admin@example.com`), live session inspection, and protected `/api/auth/me` verification.
-  - Updated `client/src/App.tsx` layout and verified production build with Vite (`npm run build`).
-  - Documented SOLID principles in `docs/solid/SOLID.md` and created `docs/milestones/M03-authentication.md`.
-- **Status**: M03 Complete. All 21 tests passed. Awaiting user approval to proceed to M04 (Basic CRUD).
+  - Defined TypeScript domain entities and DTOs in `server/src/types/entities.ts`.
+  - Implemented repositories:
+    - `MovieRepository`: parameterized CRUD queries and genre/search filters.
+    - `VenueRepository`: queries for venues, screens, and screen seat layouts.
+    - `ShowRepository`: transactional show scheduling and high-performance `GET /api/shows/:showId/seats` join query.
+  - Implemented domain services (`MovieService`, `VenueService`, `ShowService`) enforcing business logic and start/end time ordering.
+  - Implemented Zod validation schemas (`createMovieSchema`, `updateMovieSchema`, `createVenueSchema`, `createScreenSchema`, `createShowSchema`).
+  - Implemented REST controllers and mounted routers on `/api/movies`, `/api/venues`, and `/api/shows`.
+  - Created automated integration test suite in `server/tests/crud.test.ts` (13 test cases covering all CRUD endpoints, filters, 404 handling, seat grid availability, and show seat auto-population). All 34 tests in the test suite passed (1.824s).
+  - Built frontend services (`movieService.ts`, `showService.ts`) and interactive UI component `MovieCatalog.tsx` with live movie cards, screening selector, and auditorium seat map.
+  - Updated `client/src/App.tsx` and verified clean monorepo build (`npm run build`).
+  - Documented SOLID review in `docs/solid/SOLID.md` and created `docs/milestones/M04-basic-crud.md`.
+- **Status**: M04 Complete. All 34 tests passed. Awaiting user approval to proceed to M05 (Basic Booking).
