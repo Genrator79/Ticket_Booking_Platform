@@ -31,3 +31,4 @@ export interface CreateBookingPayload {
   show_id: string;
   show_seat_ids: string[];
 }
+

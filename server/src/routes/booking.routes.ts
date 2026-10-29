@@ -33,3 +33,4 @@ router.get('/', (req, res, next) => bookingController.getMyBookings(req, res, ne
 router.get('/:id', (req, res, next) => bookingController.getById(req, res, next));
 
 export const bookingRoutes = router;
+
