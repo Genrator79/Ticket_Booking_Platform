@@ -106,3 +106,4 @@ export class MovieRepository {
 }
 
 export const movieRepository = new MovieRepository();
+

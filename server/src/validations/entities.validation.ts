@@ -30,3 +30,4 @@ export const createShowSchema = z.object({
   end_time: z.string().datetime({ message: 'Invalid end_time ISO timestamp' }),
   base_price: z.number().positive('Base price must be greater than 0'),
 });
+

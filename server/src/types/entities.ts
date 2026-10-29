@@ -119,3 +119,4 @@ export interface ShowSeatWithLayout extends ShowSeat {
   seat_label: string;
   tier: SeatTier;
 }
+

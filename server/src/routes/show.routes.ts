@@ -15,3 +15,4 @@ router.post('/', validateBody(createShowSchema), (req, res, next) => showControl
 router.get('/:showId/seats', (req, res, next) => showController.getSeats(req, res, next));
 
 export const showRoutes = router;
+

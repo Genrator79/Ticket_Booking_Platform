@@ -4,78 +4,78 @@
 High-Concurrency Ticket Booking Platform (SeatForge)
 
 ## Current Milestone
-M04 — Basic CRUD
+M05 — Basic Booking
 
 ## Milestone Status
 COMPLETED
 
 ## Current Task
-Milestone M04 finalized, verified, and awaiting explicit user approval before starting M05 (Basic Booking).
+Milestone M05 finalized, verified, and awaiting explicit user approval before starting M06 (Concurrency and Double-Booking Prevention).
 
 ## Task Checklist
 - [x] M01 — Project Setup (Verified)
 - [x] M02 — Database Design (Verified)
 - [x] M03 — Authentication (Verified)
-- [x] Create domain types for Movie, Venue, Screen, Seat, Show (`server/src/types/entities.ts`)
-- [x] Implement MovieRepository and MovieService (`server/src/repositories/movie.repository.ts`, `server/src/services/movie.service.ts`)
-- [x] Implement VenueRepository and VenueService (`server/src/repositories/venue.repository.ts`, `server/src/services/venue.service.ts`)
-- [x] Implement ShowRepository and ShowService (`server/src/repositories/show.repository.ts`, `server/src/services/show.service.ts`)
-- [x] Implement Zod request schemas for Movie, Venue, Screen, Show creations/updates (`server/src/validations/entities.validation.ts`)
-- [x] Implement Controllers (`movie.controller.ts`, `venue.controller.ts`, `show.controller.ts`)
-- [x] Implement Routes and mount on `/api/movies`, `/api/venues`, `/api/shows`
-- [x] Implement `GET /api/shows/:showId/seats` seat availability endpoint (Section 11)
-- [x] Write comprehensive integration tests for CRUD APIs (`server/tests/crud.test.ts`)
-- [x] Implement frontend service layer (`movieService.ts`, `showService.ts`)
-- [x] Implement frontend catalog and seat layout viewing UI (`MovieCatalog.tsx`)
-- [x] Update documentation (`docs/milestones/M04-basic-crud.md` and `docs/solid/SOLID.md`)
-- [x] Verify test suite (34/34 passed) and production builds (0 errors)
-- [x] Complete M04 verification and set awaiting approval
+- [x] M04 — Basic CRUD (Verified)
+- [x] Create Booking and BookingSeat TypeScript types (`server/src/types/booking.ts`)
+- [x] Implement BookingRepository (`server/src/repositories/booking.repository.ts`)
+- [x] Implement BookingService (`server/src/services/booking.service.ts`) with seat availability verification and total amount calculation
+- [x] Implement Zod validation schemas for booking creation (`server/src/validations/booking.validation.ts`)
+- [x] Implement BookingController (`server/src/controllers/booking.controller.ts`)
+- [x] Wire `/api/bookings` routes with authentication middleware (`server/src/routes/booking.routes.ts`)
+- [x] Write comprehensive integration tests for booking flow (`server/tests/booking.test.ts`)
+- [x] Implement frontend booking service (`client/src/services/bookingService.ts`)
+- [x] Implement seat selection, checkout panel, and booking confirmation in UI (`MovieCatalog.tsx`)
+- [x] Implement user booking history list in UI (`MovieCatalog.tsx`)
+- [x] Update documentation (`docs/milestones/M05-basic-booking.md` and `docs/solid/SOLID.md`)
+- [x] Verify test suite (42/42 passed) and production builds (0 errors)
+- [x] Complete M05 verification and set awaiting approval
 
 ## Verified Results
-- Automated Tests (`npm test`): PASS (34/34 tests passed across 4 test suites: `db.test.ts`, `health.test.ts`, `auth.test.ts`, `crud.test.ts`)
+- Automated Tests (`npm test`): PASS (42/42 tests passed across 5 test suites: `db.test.ts`, `health.test.ts`, `auth.test.ts`, `crud.test.ts`, `booking.test.ts`)
 - Production Monorepo Build (`npm run build`): PASS (Zero TypeScript/bundling errors across server and client)
-- Movies Endpoints (`/api/movies`): PASS (Listing, genre filtering, single retrieval, creation, update, 404 handling)
-- Venues & Screens Endpoints (`/api/venues`): PASS (Listing, single venue retrieval with screens, venue/screen creation)
-- Shows Endpoints (`/api/shows`): PASS (Listing with movie/screen metadata, single retrieval, show scheduling)
-- Seat Layout (`GET /api/shows/:showId/seats`): PASS (Returns layout with rows, seats, tier, pricing, and live status)
-- Transactional Seat Population: PASS (Show creation automatically creates show_seats records for all screen seats)
-- Frontend Catalog: PASS (Interactive movies grid, screening selector, and auditorium seat map)
+- Booking Creation (`POST /api/bookings`): PASS (Atomically creates booking, itemized booking_seats, calculates total, updates show_seats to BOOKED)
+- Double-Booking Prevention: PASS (Rejects already-booked seats with 409 Conflict)
+- Owner Authorization: PASS (Lists only authenticated user's bookings; rejects unauthorized viewing with 403 Forbidden)
+- Input Validation (`Zod`): PASS (Validates UUIDs, rejects empty seat selections and duplicate seat IDs)
+- Interactive Frontend: PASS (Clickable seat grid, live checkout calculation, confirmation modal, and booking history viewer)
 
 ## Current Blockers
 None.
 
 ## Last Completed Action
-Verified all M04 Basic CRUD features, automated tests, full-stack build checks, SOLID principles documentation, and persistent tracking files.
+Verified all M05 Basic Booking features, automated tests, full-stack build checks, SOLID principles documentation, and persistent tracking files.
 
 ## Exact Next Action
-Wait for user approval to start M05 (Basic Booking: Booking entities, repository, booking flow endpoint, booking-seats relationship, checkout preview, and confirmation tests).
+Wait for user approval to start M06 (Concurrency and Double-Booking Prevention: Demonstrate race condition under concurrent requests, implement pessimistic row-level locking `SELECT ... FOR UPDATE`, ordered seat locking to eliminate deadlocks, and multi-user concurrency stress tests).
 
 ## Files Changed
-- `server/src/types/entities.ts`
-- `server/src/repositories/movie.repository.ts`
-- `server/src/repositories/venue.repository.ts`
-- `server/src/repositories/show.repository.ts`
-- `server/src/services/movie.service.ts`
-- `server/src/services/venue.service.ts`
-- `server/src/services/show.service.ts`
-- `server/src/validations/entities.validation.ts`
-- `server/src/controllers/movie.controller.ts`
-- `server/src/controllers/venue.controller.ts`
-- `server/src/controllers/show.controller.ts`
-- `server/src/routes/movie.routes.ts`
-- `server/src/routes/venue.routes.ts`
-- `server/src/routes/show.routes.ts`
+- `server/src/types/booking.ts`
+- `server/src/repositories/booking.repository.ts`
+- `server/src/services/booking.service.ts`
+- `server/src/validations/booking.validation.ts`
+- `server/src/controllers/booking.controller.ts`
+- `server/src/routes/booking.routes.ts`
 - `server/src/routes/index.ts`
-- `server/tests/crud.test.ts`
-- `client/src/types/catalog.ts`
-- `client/src/services/movieService.ts`
-- `client/src/services/showService.ts`
+- `server/tests/booking.test.ts`
+- `client/src/types/booking.ts`
+- `client/src/services/bookingService.ts`
 - `client/src/components/MovieCatalog.tsx`
-- `client/src/App.tsx`
-- `docs/milestones/M04-basic-crud.md`
+- `docs/milestones/M05-basic-booking.md`
 - `docs/solid/SOLID.md`
 - `PROJECT_STATE.md`
 - `PROJECT_LOG.md`
+
+## Important Decisions
+- **Relational Integrity**: `booking_seats` maintains an explicit foreign key to `show_seats` with individual ticket prices locked at time of booking.
+- **Atomic Booking Transaction**: Availability checks and state transitions are bound inside a single database transaction (`withTransaction`), guaranteeing no partial records if validation fails.
+- **Ownership Scope**: `GET /api/bookings/:id` strictly checks `booking.user_id === req.user.userId` or admin role, closing IDOR attack vectors.
+
+## Next Milestone
+M06 — Concurrency and Double-Booking Prevention
+
+## Approval Status
+AWAITING_USER_APPROVAL: YES
 
 ## Important Decisions
 - **Transactional Show Population**: When a show is created, an atomic transaction inserts all corresponding `show_seats` records with tier-adjusted pricing so seats are immediately available for booking.

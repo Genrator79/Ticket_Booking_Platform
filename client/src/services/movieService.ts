@@ -20,3 +20,4 @@ export const movieService = {
     return res.data.data;
   },
 };
+

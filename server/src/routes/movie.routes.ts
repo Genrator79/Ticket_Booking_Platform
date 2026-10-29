@@ -12,3 +12,4 @@ router.put('/:id', validateBody(updateMovieSchema), (req, res, next) => movieCon
 router.delete('/:id', (req, res, next) => movieController.delete(req, res, next));
 
 export const movieRoutes = router;
+

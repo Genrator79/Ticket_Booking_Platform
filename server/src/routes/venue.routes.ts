@@ -16,3 +16,4 @@ router.get('/screens/:screenId/seats', (req, res, next) =>
 );
 
 export const venueRoutes = router;
+

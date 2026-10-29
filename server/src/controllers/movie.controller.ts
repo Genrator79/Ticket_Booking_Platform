@@ -78,3 +78,4 @@ export class MovieController {
 }
 
 export const movieController = new MovieController();
+

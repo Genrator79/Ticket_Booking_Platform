@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { movieService } from '../services/movieService';
 import { showService } from '../services/showService';
+import { bookingService } from '../services/bookingService';
+import { authService } from '../services/authService';
 import type { Movie, Show, ShowSeat } from '../types/catalog';
+import type { BookingWithDetails } from '../types/booking';
 
 export function MovieCatalog() {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -14,10 +17,21 @@ export function MovieCatalog() {
     seats: ShowSeat[];
   } | null>(null);
 
+  // Seat selection & booking state
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [confirmedBooking, setConfirmedBooking] = useState<BookingWithDetails | null>(null);
+
+  // User booking history modal state
+  const [myBookings, setMyBookings] = useState<BookingWithDetails[]>([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   const [loadingMovies, setLoadingMovies] = useState(true);
   const [loadingShows, setLoadingShows] = useState(false);
   const [loadingSeats, setLoadingSeats] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
 
   // Load movies on mount
   useEffect(() => {
@@ -37,8 +51,10 @@ export function MovieCatalog() {
     setSelectedMovie(movie);
     setSelectedShow(null);
     setSeatLayout(null);
+    setSelectedSeatIds([]);
     setLoadingShows(true);
     setError(null);
+    setBookingSuccessMsg(null);
 
     try {
       const showList = await showService.getShows({ movieId: movie.id });
@@ -55,6 +71,7 @@ export function MovieCatalog() {
 
   const handleSelectShow = async (show: Show) => {
     setSelectedShow(show);
+    setSelectedSeatIds([]);
     setLoadingSeats(true);
     setError(null);
 
@@ -68,6 +85,78 @@ export function MovieCatalog() {
     }
   };
 
+  const toggleSeatSelection = (seat: ShowSeat) => {
+    if (seat.status !== 'AVAILABLE') return;
+
+    setError(null);
+    if (selectedSeatIds.includes(seat.id)) {
+      setSelectedSeatIds(selectedSeatIds.filter((id) => id !== seat.id));
+    } else {
+      if (selectedSeatIds.length >= 10) {
+        setError('Maximum 10 seats allowed per booking.');
+        return;
+      }
+      setSelectedSeatIds([...selectedSeatIds, seat.id]);
+    }
+  };
+
+  const handleConfirmBooking = async () => {
+    if (!selectedShow || selectedSeatIds.length === 0) return;
+
+    const token = authService.getToken();
+    if (!token) {
+      setError('Please log in above before booking seats.');
+      return;
+    }
+
+    setBookingLoading(true);
+    setError(null);
+    setBookingSuccessMsg(null);
+
+    try {
+      const booking = await bookingService.createBooking({
+        show_id: selectedShow.id,
+        show_seat_ids: selectedSeatIds,
+      });
+
+      setConfirmedBooking(booking);
+      setBookingSuccessMsg(`Booking #${booking.id.slice(0, 8)} confirmed successfully!`);
+      setSelectedSeatIds([]);
+
+      // Refresh seat layout immediately so booked seats turn grey
+      const refreshedLayout = await showService.getShowSeats(selectedShow.id);
+      setSeatLayout(refreshedLayout);
+    } catch (err: any) {
+      setError(err.message || 'Booking failed');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const handleOpenHistory = async () => {
+    const token = authService.getToken();
+    if (!token) {
+      setError('Please log in to view your booking history.');
+      return;
+    }
+
+    setShowHistoryModal(true);
+    setLoadingHistory(true);
+    try {
+      const list = await bookingService.getMyBookings();
+      setMyBookings(list);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load booking history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const selectedSeatsList = seatLayout
+    ? seatLayout.seats.filter((s) => selectedSeatIds.includes(s.id))
+    : [];
+  const totalAmount = selectedSeatsList.reduce((sum, s) => sum + Number(s.price), 0);
+
   return (
     <div className="w-full max-w-5xl space-y-8">
       {/* Movies Carousel / Grid */}
@@ -78,18 +167,41 @@ export function MovieCatalog() {
               🎬
             </div>
             <div>
-              <h3 className="font-semibold text-slate-100 text-base">Browse Movies & Events (M04 CRUD)</h3>
-              <p className="text-xs text-slate-400">Live catalog and scheduled screenings from PostgreSQL</p>
+              <h3 className="font-semibold text-slate-100 text-base">Select Movie & Screening</h3>
+              <p className="text-xs text-slate-400">Discover screenings, select seats, and book tickets (M05)</p>
             </div>
           </div>
-          <span className="text-xs font-mono text-slate-400">
-            {movies.length} Title{movies.length === 1 ? '' : 's'} Available
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleOpenHistory}
+              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/60 transition-colors shadow-sm"
+            >
+              🎟️ My Bookings
+            </button>
+            <span className="text-xs font-mono text-slate-400 hidden sm:inline">
+              {movies.length} Title{movies.length === 1 ? '' : 's'}
+            </span>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 p-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-300 text-xs">
-            ⚠️ {error}
+          <div className="mb-6 p-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-300 text-xs flex justify-between items-center">
+            <span>⚠️ {error}</span>
+            <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-200 text-sm ml-2">
+              ×
+            </button>
+          </div>
+        )}
+
+        {bookingSuccessMsg && (
+          <div className="mb-6 p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-xs flex justify-between items-center">
+            <span>✓ {bookingSuccessMsg}</span>
+            <button
+              onClick={() => setBookingSuccessMsg(null)}
+              className="text-emerald-400 hover:text-emerald-200 text-sm ml-2"
+            >
+              ×
+            </button>
           </div>
         )}
 
@@ -140,7 +252,7 @@ export function MovieCatalog() {
         )}
       </div>
 
-      {/* Screenings & Seat Layout for Selected Movie */}
+      {/* Screenings & Interactive Seat Grid */}
       {selectedMovie && (
         <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800/60">
@@ -148,7 +260,9 @@ export function MovieCatalog() {
               <h3 className="font-semibold text-slate-100 text-base">
                 Screenings for <span className="text-indigo-400">{selectedMovie.title}</span>
               </h3>
-              <p className="text-xs text-slate-400">{selectedMovie.description || 'Select a showtime to view live seat layout.'}</p>
+              <p className="text-xs text-slate-400">
+                {selectedMovie.description || 'Select showtime to choose seats.'}
+              </p>
             </div>
             {selectedShow && (
               <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-950 border border-indigo-800/60 text-indigo-300">
@@ -195,32 +309,36 @@ export function MovieCatalog() {
                 })}
               </div>
 
-              {/* Seat Layout View (Section 11) */}
+              {/* Seat Layout View with Clickable Selection */}
               {selectedShow && (
                 <div className="mt-8 pt-6 border-t border-slate-800/80">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
                     <div>
                       <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-300">
-                        Auditorium Seating Grid (GET /api/shows/:showId/seats)
+                        Select Seats ({selectedShow.venue_name} — {selectedShow.screen_name})
                       </h4>
                       <p className="text-[11px] text-slate-400">
-                        {selectedShow.venue_name} — {selectedShow.screen_name}
+                        Click on available seats to add them to your booking.
                       </p>
                     </div>
 
                     {seatLayout && (
-                      <div className="flex items-center gap-4 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-4 text-[11px]">
                         <span className="flex items-center gap-1.5 text-emerald-400">
                           <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
-                          Available ({seatLayout.availableSeats})
+                          Available
+                        </span>
+                        <span className="flex items-center gap-1.5 text-indigo-400">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500"></span>
+                          Selected ({selectedSeatIds.length})
                         </span>
                         <span className="flex items-center gap-1.5 text-amber-400">
                           <span className="w-2.5 h-2.5 rounded-sm bg-amber-500"></span>
-                          Held (0)
+                          Held
                         </span>
                         <span className="flex items-center gap-1.5 text-slate-500">
                           <span className="w-2.5 h-2.5 rounded-sm bg-slate-700"></span>
-                          Booked ({seatLayout.totalSeats - seatLayout.availableSeats})
+                          Booked
                         </span>
                       </div>
                     )}
@@ -254,20 +372,28 @@ export function MovieCatalog() {
                                 </span>
                                 <div className="flex gap-1.5">
                                   {rowSeats.map((seat) => {
+                                    const isSelected = selectedSeatIds.includes(seat.id);
                                     const isAvailable = seat.status === 'AVAILABLE';
                                     const isHeld = seat.status === 'HELD';
+
+                                    let badgeColor = 'bg-slate-800/60 border border-slate-700/60 text-slate-400 cursor-not-allowed';
+                                    if (isSelected) {
+                                      badgeColor =
+                                        'bg-indigo-600 border border-indigo-400 text-white font-bold ring-2 ring-indigo-400 scale-105 cursor-pointer shadow-md';
+                                    } else if (isAvailable) {
+                                      badgeColor =
+                                        'bg-emerald-950/80 border border-emerald-600/60 text-emerald-300 hover:bg-emerald-600 hover:text-white cursor-pointer';
+                                    } else if (isHeld) {
+                                      badgeColor =
+                                        'bg-amber-950/80 border border-amber-600/60 text-amber-300 cursor-not-allowed';
+                                    }
 
                                     return (
                                       <div
                                         key={seat.id}
+                                        onClick={() => toggleSeatSelection(seat)}
                                         title={`${seat.seat_label} (${seat.tier}) - $${Number(seat.price).toFixed(2)}`}
-                                        className={`w-7 h-7 rounded text-[10px] font-mono flex items-center justify-center transition-all ${
-                                          isAvailable
-                                            ? 'bg-emerald-950/80 border border-emerald-600/60 text-emerald-300 hover:bg-emerald-600 hover:text-white cursor-pointer'
-                                            : isHeld
-                                            ? 'bg-amber-950/80 border border-amber-600/60 text-amber-300 cursor-not-allowed'
-                                            : 'bg-slate-800/60 border border-slate-700/60 text-slate-400 cursor-not-allowed'
-                                        }`}
+                                        className={`w-7 h-7 rounded text-[10px] font-mono flex items-center justify-center transition-all ${badgeColor}`}
                                       >
                                         {seat.number}
                                       </div>
@@ -279,15 +405,141 @@ export function MovieCatalog() {
                           })}
                       </div>
 
-                      <div className="mt-6 text-[11px] text-slate-400">
-                        Showing live availability from PostgreSQL <code className="text-indigo-300">show_seats</code> table.
-                      </div>
+                      {/* Checkout Action Panel (Section 12 & 23) */}
+                      {selectedSeatIds.length > 0 && (
+                        <div className="mt-8 w-full max-w-lg p-4 rounded-xl bg-slate-900 border border-indigo-500/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                          <div>
+                            <div className="text-xs text-slate-300">
+                              Selected: <span className="font-bold text-indigo-400">{selectedSeatsList.map((s) => s.seat_label).join(', ')}</span>
+                            </div>
+                            <div className="text-lg font-extrabold text-white">
+                              Total: ${totalAmount.toFixed(2)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={handleConfirmBooking}
+                            disabled={bookingLoading}
+                            className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50"
+                          >
+                            {bookingLoading ? 'Processing Booking...' : 'Book Selected Seats'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Booking Confirmation Modal (Section 23) */}
+      {confirmedBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full p-6 rounded-2xl bg-slate-900 border border-emerald-500/50 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-base">
+                <span>🎉</span> Booking Confirmed!
+              </div>
+              <button
+                onClick={() => setConfirmedBooking(null)}
+                className="text-slate-400 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-300">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Booking ID:</span>
+                <span className="font-mono text-[11px] text-indigo-300">{confirmedBooking.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Movie:</span>
+                <span className="font-semibold text-white">{confirmedBooking.movie_title}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Venue & Screen:</span>
+                <span>{confirmedBooking.venue_name} ({confirmedBooking.screen_name})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Seats:</span>
+                <span className="font-mono font-bold text-emerald-400">
+                  {confirmedBooking.seats.map((s) => s.seat_label).join(', ')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Amount:</span>
+                <span className="font-bold text-white">${Number(confirmedBooking.total_amount).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Status:</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  {confirmedBooking.status}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setConfirmedBooking(null)}
+              className="w-full mt-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Booking History Modal */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-xl w-full max-h-[80vh] flex flex-col p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-base">Your Booking History</h3>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-3">
+              {loadingHistory ? (
+                <div className="py-8 text-center text-xs text-slate-400 animate-pulse">Loading history...</div>
+              ) : myBookings.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400">You have no bookings recorded yet.</div>
+              ) : (
+                myBookings.map((b) => (
+                  <div key={b.id} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-xs text-white">{b.movie_title}</h4>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                        {b.status}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      {b.venue_name} • {b.screen_name}
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
+                      <span className="text-slate-400">
+                        Seats: <span className="font-mono text-indigo-300">{b.seats.map((s) => s.seat_label).join(', ')}</span>
+                      </span>
+                      <span className="font-bold text-white">${Number(b.total_amount).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowHistoryModal(false)}
+              className="mt-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       )}
     </div>

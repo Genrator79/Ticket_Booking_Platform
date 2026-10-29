@@ -57,19 +57,15 @@
     - `008_create_payments_table.sql`: Payments records linked to bookings with idempotency key support.
   - Implemented migration runner `database/migrate.ts` with version tracking in `schema_migrations` and idempotent execution.
 
-### 2026-10-29 - Milestone M04: Basic CRUD & Show Management Completed
-- **Milestone & Task**: M04 — Basic CRUD / Movies, Venues, Screens, Shows, and Seat Layout
+### 2026-10-29 - Milestone M05: Basic Booking Completed
+- **Milestone & Task**: M05 — Basic Booking / End-to-End Booking Lifecycle
 - **Action**:
-  - Defined TypeScript domain entities and DTOs in `server/src/types/entities.ts`.
-  - Implemented repositories:
-    - `MovieRepository`: parameterized CRUD queries and genre/search filters.
-    - `VenueRepository`: queries for venues, screens, and screen seat layouts.
-    - `ShowRepository`: transactional show scheduling and high-performance `GET /api/shows/:showId/seats` join query.
-  - Implemented domain services (`MovieService`, `VenueService`, `ShowService`) enforcing business logic and start/end time ordering.
-  - Implemented Zod validation schemas (`createMovieSchema`, `updateMovieSchema`, `createVenueSchema`, `createScreenSchema`, `createShowSchema`).
-  - Implemented REST controllers and mounted routers on `/api/movies`, `/api/venues`, and `/api/shows`.
-  - Created automated integration test suite in `server/tests/crud.test.ts` (13 test cases covering all CRUD endpoints, filters, 404 handling, seat grid availability, and show seat auto-population). All 34 tests in the test suite passed (1.824s).
-  - Built frontend services (`movieService.ts`, `showService.ts`) and interactive UI component `MovieCatalog.tsx` with live movie cards, screening selector, and auditorium seat map.
-  - Updated `client/src/App.tsx` and verified clean monorepo build (`npm run build`).
-  - Documented SOLID review in `docs/solid/SOLID.md` and created `docs/milestones/M04-basic-crud.md`.
-- **Status**: M04 Complete. All 34 tests passed. Awaiting user approval to proceed to M05 (Basic Booking).
+  - Defined booking TypeScript domain entities in `server/src/types/booking.ts` (`Booking`, `BookingSeat`, `BookingSeatDetail`, `BookingWithDetails`).
+  - Implemented `BookingRepository` in `server/src/repositories/booking.repository.ts` for transactional creation of `bookings`, itemized `booking_seats`, batch seat lookups, and owner-scoped queries.
+  - Implemented `BookingService` in `server/src/services/booking.service.ts` enforcing show seat existence, availability checking, price summation, and owner authorization rules.
+  - Implemented Zod validation in `server/src/validations/booking.validation.ts` (`createBookingSchema` restricting 1-10 seats per booking).
+  - Implemented `BookingController` and mounted routes under `/api/bookings` with `authenticate` JWT middleware.
+  - Created automated integration test suite in `server/tests/booking.test.ts` (8 test cases verifying booking creation, total price summation, `show_seats` status update to `BOOKED`, 409 conflict handling, empty/duplicate payload rejections, and 403 forbidden access controls). All 42 tests in the project test suite passed (2.103s).
+  - Built frontend client `bookingService.ts` and updated `MovieCatalog.tsx` with clickable seat selection, live checkout total drawer, booking confirmation modal, and personal booking history viewer.
+  - Documented SOLID review in `docs/solid/SOLID.md` and created `docs/milestones/M05-basic-booking.md`.
+- **Status**: M05 Complete. All 42 tests passed. Awaiting user approval to proceed to M06 (Concurrency and Double-Booking Prevention).
