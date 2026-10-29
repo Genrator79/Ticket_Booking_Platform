@@ -40,3 +40,4 @@ export class ConflictError extends AppHttpError {
     super(409, message);
   }
 }
+

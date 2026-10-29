@@ -24,3 +24,4 @@ export interface AuthTokenPayload {
   email: string;
   role: UserRole;
 }
+
