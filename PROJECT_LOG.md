@@ -57,15 +57,18 @@
     - `008_create_payments_table.sql`: Payments records linked to bookings with idempotency key support.
   - Implemented migration runner `database/migrate.ts` with version tracking in `schema_migrations` and idempotent execution.
 
-### 2026-10-29 - Milestone M05: Basic Booking Completed
-- **Milestone & Task**: M05 — Basic Booking / End-to-End Booking Lifecycle
+### 2026-10-29 - Milestone M06: Concurrency and Double-Booking Prevention Completed
+- **Milestone & Task**: M06 — Concurrency / Pessimistic Locking & Deadlock Elimination
 - **Action**:
-  - Defined booking TypeScript domain entities in `server/src/types/booking.ts` (`Booking`, `BookingSeat`, `BookingSeatDetail`, `BookingWithDetails`).
-  - Implemented `BookingRepository` in `server/src/repositories/booking.repository.ts` for transactional creation of `bookings`, itemized `booking_seats`, batch seat lookups, and owner-scoped queries.
-  - Implemented `BookingService` in `server/src/services/booking.service.ts` enforcing show seat existence, availability checking, price summation, and owner authorization rules.
-  - Implemented Zod validation in `server/src/validations/booking.validation.ts` (`createBookingSchema` restricting 1-10 seats per booking).
-  - Implemented `BookingController` and mounted routes under `/api/bookings` with `authenticate` JWT middleware.
-  - Created automated integration test suite in `server/tests/booking.test.ts` (8 test cases verifying booking creation, total price summation, `show_seats` status update to `BOOKED`, 409 conflict handling, empty/duplicate payload rejections, and 403 forbidden access controls). All 42 tests in the project test suite passed (2.103s).
-  - Built frontend client `bookingService.ts` and updated `MovieCatalog.tsx` with clickable seat selection, live checkout total drawer, booking confirmation modal, and personal booking history viewer.
-  - Documented SOLID review in `docs/solid/SOLID.md` and created `docs/milestones/M05-basic-booking.md`.
-- **Status**: M05 Complete. All 42 tests passed. Awaiting user approval to proceed to M06 (Concurrency and Double-Booking Prevention).
+  - Implemented `getShowSeatsForUpdate` in `server/src/repositories/booking.repository.ts` using `ORDER BY ss.id ASC` and `FOR UPDATE OF ss`.
+  - Updated `BookingService.createBooking` to acquire exclusive row-level write locks on target `show_seats` rows inside `withTransaction`.
+  - Updated `updateShowSeatsStatus` with optimistic `version = version + 1` increments and atomic conditional `WHERE status = 'AVAILABLE'` checks with row-count verification.
+  - Implemented `createBookingWithoutLocking` in `BookingService` to reproduce the classic double-booking race condition.
+  - Built comprehensive concurrency test suite in `server/tests/concurrency.test.ts`:
+    - Demonstrated race condition without locks producing duplicate bookings for the same seat.
+    - Fired 50 concurrent requests competing for the exact same seat: exactly 1 winner (201 Created), 49 conflict rejections (409 Conflict), exactly 1 database booking written, and zero double bookings.
+    - Verified multi-seat overlapping requests with deterministic UUID ordering, verifying zero circular wait deadlocks (PostgreSQL 40P01).
+    - Verified atomic transaction rollback when one requested seat is unavailable.
+  - Updated `server/package.json` test script with `--runInBand` to prevent parallel test state collisions. All 46 tests across 6 suites passed (2.081s).
+  - Documented SOLID review in `docs/solid/SOLID.md` and created `docs/milestones/M06-concurrency.md` with interview Q&A.
+- **Status**: M06 Complete. All 46 tests passed. Awaiting user approval to proceed to M07 (Redis).

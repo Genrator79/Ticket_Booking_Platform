@@ -11,9 +11,11 @@ export class BookingService {
   ) {}
 
   /**
-   * Creates a basic booking within a PostgreSQL transaction.
-   * Checks availability, inserts booking record, creates booking_seats,
-   * and updates seat status to BOOKED.
+   * Books seats inside a PostgreSQL transaction using pessimistic row-level locking.
+   *
+   * The requested show-seat rows are locked with `SELECT ... FOR UPDATE` before checking
+   * availability so competing transactions cannot concurrently book the same seat successfully.
+   * Seat IDs are locked in sorted order to prevent circular wait deadlocks.
    */
   async createBooking(userId: string, input: CreateBookingDTO): Promise<BookingWithDetails> {
     const { show_id, show_seat_ids } = input;
@@ -34,14 +36,14 @@ export class BookingService {
     }
 
     const createdBooking = await withTransaction(async (client) => {
-      // 1. Fetch seat records
-      const seats = await this.repo.getShowSeatsByIds(uniqueSeatIds, client);
+      // 1. Acquire pessimistic row-level locks on requested show_seats in sorted order
+      const seats = await this.repo.getShowSeatsForUpdate(client, uniqueSeatIds);
 
       if (seats.length !== uniqueSeatIds.length) {
         throw new BadRequestError('One or more requested seats could not be found');
       }
 
-      // 2. Validate show ownership and availability
+      // 2. Validate show ownership and availability inside the locked transaction
       for (const seat of seats) {
         if (seat.show_id !== show_id) {
           throw new BadRequestError(`Seat ${seat.seat_label} does not belong to show ${show_id}`);
@@ -69,8 +71,17 @@ export class BookingService {
       }));
       await this.repo.createBookingSeats(client, booking.id, seatItems);
 
-      // 6. Update show_seats status to BOOKED
-      await this.repo.updateShowSeatsStatus(client, uniqueSeatIds, 'BOOKED');
+      // 6. Transition show_seats status to BOOKED with version increment
+      const updatedCount = await this.repo.updateShowSeatsStatus(
+        client,
+        uniqueSeatIds,
+        'BOOKED',
+        'AVAILABLE'
+      );
+
+      if (updatedCount !== uniqueSeatIds.length) {
+        throw new ConflictError('Concurrent modification detected: unable to claim all seats');
+      }
 
       return booking;
     });
@@ -81,6 +92,56 @@ export class BookingService {
     }
 
     return fullBooking;
+  }
+
+  /**
+   * Intentionally vulnerable booking method that omits `FOR UPDATE` row-locking
+   * and introduces an artificial delay between availability check and booking write.
+   * Used strictly in tests to demonstrate the race condition vulnerability.
+   */
+  async createBookingWithoutLocking(
+    userId: string,
+    input: CreateBookingDTO,
+    delayMs = 50
+  ): Promise<BookingWithDetails> {
+    const { show_id, show_seat_ids } = input;
+    const uniqueSeatIds = Array.from(new Set(show_seat_ids));
+
+    const createdBooking = await withTransaction(async (client) => {
+      // Intentionally vulnerable: plain SELECT without row-locking
+      const seats = await this.repo.getShowSeatsByIds(uniqueSeatIds, client);
+
+      for (const seat of seats) {
+        if (seat.status !== 'AVAILABLE') {
+          throw new ConflictError(`Seat ${seat.seat_label} is no longer available (${seat.status})`);
+        }
+      }
+
+      // Artificial window where competing transactions read the same uncommitted status
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      const totalAmount = seats.reduce((sum, seat) => sum + Number(seat.price), 0);
+      const booking = await this.repo.createBookingRecord(client, {
+        user_id: userId,
+        show_id,
+        total_amount: totalAmount,
+        status: 'CONFIRMED',
+      });
+
+      const seatItems = seats.map((s) => ({
+        show_seat_id: s.id,
+        price: Number(s.price),
+      }));
+      await this.repo.createBookingSeats(client, booking.id, seatItems);
+      await this.repo.updateShowSeatsStatus(client, uniqueSeatIds, 'BOOKED');
+
+      return booking;
+    });
+
+    const fullBooking = await this.repo.findById(createdBooking.id);
+    return fullBooking!;
   }
 
   /**

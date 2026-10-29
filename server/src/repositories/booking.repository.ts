@@ -45,6 +45,42 @@ export class BookingRepository {
   }
 
   /**
+   * Retrieves and locks requested show_seats rows using pessimistic row-level locking (SELECT ... FOR UPDATE).
+   * 
+   * Concurrency & Deadlock Prevention:
+   * 1. `ORDER BY ss.id ASC`: Deterministic UUID sorting guarantees that concurrent transactions
+   *    always request locks in identical order, eliminating circular wait deadlocks (PostgreSQL 40P01).
+   * 2. `FOR UPDATE OF ss`: Acquires exclusive row locks on show_seats. Competing transactions
+   *    vying for the same seat will block until the lock holder commits or rolls back.
+   */
+  async getShowSeatsForUpdate(
+    client: pg.PoolClient,
+    showSeatIds: string[]
+  ): Promise<ShowSeatLookup[]> {
+    const sortedIds = [...showSeatIds].sort();
+
+    const sql = `
+      SELECT 
+        ss.id,
+        ss.show_id,
+        ss.seat_id,
+        ss.status,
+        ss.price,
+        s.seat_label,
+        s.row,
+        s.number,
+        s.tier
+      FROM show_seats ss
+      JOIN seats s ON ss.seat_id = s.id
+      WHERE ss.id = ANY($1)
+      ORDER BY ss.id ASC
+      FOR UPDATE OF ss
+    `;
+    const result = await client.query<ShowSeatLookup>(sql, [sortedIds]);
+    return result.rows;
+  }
+
+  /**
    * Inserts the master booking record.
    */
   async createBookingRecord(
@@ -89,19 +125,29 @@ export class BookingRepository {
   }
 
   /**
-   * Updates status of show_seats (e.g. marking them BOOKED).
+   * Updates status of show_seats with optimistic version increment.
+   * Optionally verifies expected current status as defense-in-depth against stale writes.
    */
   async updateShowSeatsStatus(
     client: pg.PoolClient,
     showSeatIds: string[],
-    status: 'AVAILABLE' | 'HELD' | 'BOOKED'
-  ): Promise<void> {
-    await client.query(
-      `UPDATE show_seats 
-       SET status = $1, updated_at = NOW()
-       WHERE id = ANY($2)`,
-      [status, showSeatIds]
-    );
+    newStatus: 'AVAILABLE' | 'HELD' | 'BOOKED',
+    expectedCurrentStatus?: 'AVAILABLE' | 'HELD'
+  ): Promise<number> {
+    let sql = `
+      UPDATE show_seats 
+      SET status = $1, version = version + 1, updated_at = NOW()
+      WHERE id = ANY($2)
+    `;
+    const params: any[] = [newStatus, showSeatIds];
+
+    if (expectedCurrentStatus) {
+      params.push(expectedCurrentStatus);
+      sql += ` AND status = $${params.length}`;
+    }
+
+    const result = await client.query(sql, params);
+    return result.rowCount ?? 0;
   }
 
   /**

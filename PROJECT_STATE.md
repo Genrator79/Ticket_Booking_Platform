@@ -4,67 +4,71 @@
 High-Concurrency Ticket Booking Platform (SeatForge)
 
 ## Current Milestone
-M05 — Basic Booking
+M06 — Concurrency and Double-Booking Prevention
 
 ## Milestone Status
 COMPLETED
 
 ## Current Task
-Milestone M05 finalized, verified, and awaiting explicit user approval before starting M06 (Concurrency and Double-Booking Prevention).
+Milestone M06 finalized, verified, and awaiting explicit user approval before starting M07 (Redis).
 
 ## Task Checklist
 - [x] M01 — Project Setup (Verified)
 - [x] M02 — Database Design (Verified)
 - [x] M03 — Authentication (Verified)
 - [x] M04 — Basic CRUD (Verified)
-- [x] Create Booking and BookingSeat TypeScript types (`server/src/types/booking.ts`)
-- [x] Implement BookingRepository (`server/src/repositories/booking.repository.ts`)
-- [x] Implement BookingService (`server/src/services/booking.service.ts`) with seat availability verification and total amount calculation
-- [x] Implement Zod validation schemas for booking creation (`server/src/validations/booking.validation.ts`)
-- [x] Implement BookingController (`server/src/controllers/booking.controller.ts`)
-- [x] Wire `/api/bookings` routes with authentication middleware (`server/src/routes/booking.routes.ts`)
-- [x] Write comprehensive integration tests for booking flow (`server/tests/booking.test.ts`)
-- [x] Implement frontend booking service (`client/src/services/bookingService.ts`)
-- [x] Implement seat selection, checkout panel, and booking confirmation in UI (`MovieCatalog.tsx`)
-- [x] Implement user booking history list in UI (`MovieCatalog.tsx`)
-- [x] Update documentation (`docs/milestones/M05-basic-booking.md` and `docs/solid/SOLID.md`)
-- [x] Verify test suite (42/42 passed) and production builds (0 errors)
-- [x] Complete M05 verification and set awaiting approval
+- [x] M05 — Basic Booking (Verified)
+- [x] Implement `getShowSeatsForUpdate` in `BookingRepository` with `FOR UPDATE OF ss` and deterministic ID sorting
+- [x] Update `BookingService` to utilize row-level locking inside transactions
+- [x] Add optimistic version checking (`version = version + 1`) to `show_seats` update
+- [x] Implement `createBookingWithoutLocking` test helper to demonstrate race condition
+- [x] Write dedicated high-concurrency test suite (`server/tests/concurrency.test.ts`)
+- [x] Test 50+ concurrent requests competing for the exact same seat (asserting exactly 1 winner, 0 double bookings, 49 conflicts)
+- [x] Test multi-seat contention with overlapping seats (asserting deadlock-free execution)
+- [x] Verify atomic transaction rollback on partial availability failure
+- [x] Document interview Q&A and system design analysis in `docs/milestones/M06-concurrency.md`
+- [x] Update `docs/solid/SOLID.md` and progress tracking files
+- [x] Verify test suite (46/46 passed) and production builds (0 errors)
+- [x] Complete M06 verification and set awaiting approval
 
 ## Verified Results
-- Automated Tests (`npm test`): PASS (42/42 tests passed across 5 test suites: `db.test.ts`, `health.test.ts`, `auth.test.ts`, `crud.test.ts`, `booking.test.ts`)
-- Production Monorepo Build (`npm run build`): PASS (Zero TypeScript/bundling errors across server and client)
-- Booking Creation (`POST /api/bookings`): PASS (Atomically creates booking, itemized booking_seats, calculates total, updates show_seats to BOOKED)
-- Double-Booking Prevention: PASS (Rejects already-booked seats with 409 Conflict)
-- Owner Authorization: PASS (Lists only authenticated user's bookings; rejects unauthorized viewing with 403 Forbidden)
-- Input Validation (`Zod`): PASS (Validates UUIDs, rejects empty seat selections and duplicate seat IDs)
-- Interactive Frontend: PASS (Clickable seat grid, live checkout calculation, confirmation modal, and booking history viewer)
+- Automated Tests (`npm test`): PASS (46/46 tests passed across 6 test suites: `db.test.ts`, `health.test.ts`, `auth.test.ts`, `crud.test.ts`, `booking.test.ts`, `concurrency.test.ts`)
+- Production Monorepo Build (`npm run build`): PASS (Zero errors across client and server)
+- Race Condition Demonstration: PASS (Proved duplicate booking occurs when row locking is omitted)
+- 50-User Concurrent Single-Seat Contention: PASS (1 winner with 201 Created, 49 conflicts with 409 Conflict, exactly 1 database booking, 0 double bookings)
+- Deadlock Elimination: PASS (Sorted UUID ordering successfully prevented PostgreSQL 40P01 circular deadlocks)
+- Atomic Rollback: PASS (Transactions cleanly rollback when any seat in a multi-seat request is unavailable)
 
 ## Current Blockers
 None.
 
 ## Last Completed Action
-Verified all M05 Basic Booking features, automated tests, full-stack build checks, SOLID principles documentation, and persistent tracking files.
+Verified all M06 Concurrency and Double-Booking Prevention features, automated stress tests, full-stack build checks, SOLID documentation, and persistent tracking files.
 
 ## Exact Next Action
-Wait for user approval to start M06 (Concurrency and Double-Booking Prevention: Demonstrate race condition under concurrent requests, implement pessimistic row-level locking `SELECT ... FOR UPDATE`, ordered seat locking to eliminate deadlocks, and multi-user concurrency stress tests).
+Wait for user approval to start M07 (Redis: Redis client configuration, Redis service module with GET/SET/DEL/TTL/atomic operations, connection health probe, and tests).
 
 ## Files Changed
-- `server/src/types/booking.ts`
 - `server/src/repositories/booking.repository.ts`
 - `server/src/services/booking.service.ts`
-- `server/src/validations/booking.validation.ts`
-- `server/src/controllers/booking.controller.ts`
-- `server/src/routes/booking.routes.ts`
-- `server/src/routes/index.ts`
-- `server/tests/booking.test.ts`
-- `client/src/types/booking.ts`
-- `client/src/services/bookingService.ts`
-- `client/src/components/MovieCatalog.tsx`
-- `docs/milestones/M05-basic-booking.md`
+- `server/src/types/booking.ts`
+- `server/package.json`
+- `server/tests/concurrency.test.ts`
+- `docs/milestones/M06-concurrency.md`
 - `docs/solid/SOLID.md`
 - `PROJECT_STATE.md`
 - `PROJECT_LOG.md`
+
+## Important Decisions
+- **Pessimistic Row-Level Locking**: `SELECT ... FOR UPDATE OF ss` locks target rows at the database level, serializing concurrent writes without requiring fragile application-level mutexes.
+- **Deterministic Lock Ordering**: All seat IDs are sorted alphabetically/lexicographically by UUID before acquiring locks, mathematically eliminating circular wait deadlocks.
+- **Conditional Atomic Writes**: `UPDATE show_seats SET status = 'BOOKED', version = version + 1 WHERE id = ANY($1) AND status = 'AVAILABLE'` provides defense-in-depth against concurrent state mutations.
+
+## Next Milestone
+M07 — Redis
+
+## Approval Status
+AWAITING_USER_APPROVAL: YES
 
 ## Important Decisions
 - **Relational Integrity**: `booking_seats` maintains an explicit foreign key to `show_seats` with individual ticket prices locked at time of booking.
