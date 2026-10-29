@@ -8,6 +8,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CLIENT_URL: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().default('postgresql://localhost:5432/ticket_booking'),
+  JWT_SECRET: z.string().default('dev-jwt-super-secret-key-at-least-32-chars-long'),
+  JWT_EXPIRES_IN: z.string().default('24h'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

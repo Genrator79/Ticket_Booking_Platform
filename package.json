@@ -14,6 +14,7 @@
     "build": "npm run build --workspace=server && npm run build --workspace=client",
     "build:server": "npm run build --workspace=server",
     "build:client": "npm run build --workspace=client",
+    "test": "npm test --workspace=server",
     "typecheck": "npm run typecheck --workspace=server && npm run build --workspace=client",
     "db:migrate": "tsx database/migrate.ts",
     "db:seed": "tsx database/seed/index.ts",
