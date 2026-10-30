@@ -70,3 +70,4 @@ If temporary holds were placed directly in PostgreSQL:
 ### Q2: How does `SET key val EX ttl NX` prevent race conditions in distributed systems?
 **Answer**:
 In Redis, `SETNX` (`SET ... NX`) is atomic. Because Redis processes commands sequentially on its single-threaded event loop, two simultaneous requests to `SET lock:seat:101 user_id NX` cannot interleave. Exactly one request will evaluate first, find that the key does not exist, set the key, and return `'OK'`. The second request will find the key already exists and return `nil`. Combining this with `EX ttl` guarantees that the lock expires automatically even if the holding process crashes, preventing permanent deadlocks.
+
