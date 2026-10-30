@@ -420,3 +420,4 @@ describe('M09 — Payment Simulation Integration Tests', () => {
     expect(sRow.rows[0].status).toBe('BOOKED');
   });
 });
+

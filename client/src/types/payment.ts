@@ -22,3 +22,4 @@ export interface ProcessPaymentPayload {
 export interface RefundPayload {
   reason?: string;
 }
+

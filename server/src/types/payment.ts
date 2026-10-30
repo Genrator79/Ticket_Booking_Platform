@@ -43,3 +43,4 @@ export interface PaymentReceipt {
   failureReason?: string;
   createdAt: string;
 }
+

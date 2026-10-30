@@ -130,3 +130,4 @@ When an HTTP request to the payment gateway times out (e.g. after 15 seconds):
 2. The payment record is kept in `PENDING` status.
 3. A background reconciliation task polls the gateway API using the idempotency key to query the definitive charge status.
 4. If the charge succeeded, the booking is confirmed; if the charge was never created, the hold is released.
+

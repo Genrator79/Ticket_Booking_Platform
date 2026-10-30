@@ -51,3 +51,4 @@ export interface PaymentProvider {
    */
   verifyWebhookSignature?(payload: string, signature: string): boolean;
 }
+

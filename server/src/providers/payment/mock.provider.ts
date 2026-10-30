@@ -106,3 +106,4 @@ export class MockPaymentProvider implements PaymentProvider {
 export const mockPaymentProvider = new MockPaymentProvider({
   simulatedDelayMs: process.env.NODE_ENV === 'test' ? 0 : 50,
 });
+
