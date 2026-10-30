@@ -16,3 +16,4 @@ export interface CreateHoldPayload {
   show_seat_ids: string[];
   ttl_seconds?: number;
 }
+

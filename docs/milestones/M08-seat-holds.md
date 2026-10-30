@@ -138,3 +138,4 @@ Using **Redis** as an ephemeral lease tier eliminates all database write overhea
    - Fall back to pessimistic database row-level locking directly for bookings (`SELECT ... FOR UPDATE`), or
    - Return a 503 / Degraded status for new hold requests until Redis reconnects.
 3. **Persistence (RDB/AOF)**: In production, Redis is deployed with Append-Only File (AOF with `appendfsync everysec`) or in a Redis Cluster / Sentinel setup with automatic failover, keeping data loss to under one second.
+

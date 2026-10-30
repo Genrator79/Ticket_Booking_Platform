@@ -26,3 +26,4 @@ export const holdService = {
     await api.delete<ApiResponse<null>>(`/holds/${holdId}`);
   },
 };
+

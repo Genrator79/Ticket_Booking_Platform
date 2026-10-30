@@ -22,3 +22,4 @@ router.delete('/:id', validateParams(holdIdParamSchema), (req, res, next) =>
 );
 
 export const holdRoutes = router;
+
