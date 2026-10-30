@@ -5,6 +5,7 @@ import { movieRoutes } from './movie.routes.js';
 import { venueRoutes } from './venue.routes.js';
 import { showRoutes } from './show.routes.js';
 import { bookingRoutes } from './booking.routes.js';
+import { holdRoutes } from './hold.routes.js';
 
 const apiRouter = Router();
 
@@ -14,5 +15,6 @@ apiRouter.use('/movies', movieRoutes);
 apiRouter.use('/venues', venueRoutes);
 apiRouter.use('/shows', showRoutes);
 apiRouter.use('/bookings', bookingRoutes);
+apiRouter.use('/holds', holdRoutes);
 
 export default apiRouter;

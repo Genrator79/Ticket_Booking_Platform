@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { closePool, query } from '../src/db/index';
+import { closeRedis } from '../src/redis/index';
 
 describe('Basic CRUD & Show Management Integration Tests (M04)', () => {
   const app = createApp();
@@ -41,6 +42,7 @@ describe('Basic CRUD & Show Management Integration Tests (M04)', () => {
 
   afterAll(async () => {
     await closePool();
+    await closeRedis();
   });
 
   describe('Movies API (/api/movies)', () => {

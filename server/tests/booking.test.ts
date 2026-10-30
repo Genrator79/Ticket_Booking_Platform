@@ -2,6 +2,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app';
 import { closePool, query } from '../src/db/index';
+import { closeRedis } from '../src/redis/index';
 import { env } from '../src/config/env';
 
 describe('Basic Booking Flow Integration Tests (M05)', () => {
@@ -62,6 +63,7 @@ describe('Basic Booking Flow Integration Tests (M05)', () => {
     await query('DELETE FROM bookings WHERE user_id IN ($1, $2)', [testUser1.id, testUser2.id]);
     await query('DELETE FROM users WHERE id IN ($1, $2)', [testUser1.id, testUser2.id]);
     await closePool();
+    await closeRedis();
   });
 
   describe('POST /api/bookings', () => {

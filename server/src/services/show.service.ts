@@ -3,12 +3,14 @@ import { MovieRepository, movieRepository } from '../repositories/movie.reposito
 import { VenueRepository, venueRepository } from '../repositories/venue.repository.js';
 import { CreateShowDTO, Show, ShowSeatWithLayout, ShowWithDetails } from '../types/entities.js';
 import { BadRequestError, NotFoundError } from '../utils/errors.js';
+import { holdService, HoldService } from './hold.service.js';
 
 export class ShowService {
   constructor(
     private repo: ShowRepository = showRepository,
     private movieRepo: MovieRepository = movieRepository,
-    private venueRepo: VenueRepository = venueRepository
+    private venueRepo: VenueRepository = venueRepository,
+    private holdSvc: HoldService = holdService
   ) {}
 
   async getAllShows(filters?: { movieId?: string; date?: string }): Promise<ShowWithDetails[]> {
@@ -45,7 +47,7 @@ export class ShowService {
 
   /**
    * Retrieves seat layout and real-time availability for a given show.
-   * Requirement from Section 11 of the system specification.
+   * Merges persistent PostgreSQL availability with ephemeral Redis seat holds.
    */
   async getShowSeatsLayout(showId: string): Promise<{ showId: string; totalSeats: number; availableSeats: number; seats: ShowSeatWithLayout[] }> {
     const show = await this.repo.findById(showId);
@@ -54,16 +56,30 @@ export class ShowService {
     }
 
     const seats = await this.repo.getShowSeats(showId);
-    const availableSeats = seats.filter((s) => s.status === 'AVAILABLE').length;
+    const showSeatIds = seats.map((s) => s.id);
+    const heldSeatIds = await this.holdSvc.getActiveHeldSeatIds(showId, showSeatIds);
+
+    const mergedSeats: ShowSeatWithLayout[] = seats.map((seat) => {
+      if (seat.status === 'AVAILABLE' && heldSeatIds.has(seat.id)) {
+        return {
+          ...seat,
+          status: 'HELD',
+        };
+      }
+      return seat;
+    });
+
+    const availableSeats = mergedSeats.filter((s) => s.status === 'AVAILABLE').length;
 
     return {
       showId,
-      totalSeats: seats.length,
+      totalSeats: mergedSeats.length,
       availableSeats,
-      seats,
+      seats: mergedSeats,
     };
   }
 }
 
 export const showService = new ShowService();
+
 

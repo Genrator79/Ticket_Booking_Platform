@@ -41,7 +41,8 @@ export interface BookingWithDetails extends Booking {
 }
 
 export interface CreateBookingDTO {
-  show_id: string;
-  show_seat_ids: string[];
+  show_id?: string;
+  show_seat_ids?: string[];
+  hold_id?: string;
 }
 

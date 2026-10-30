@@ -3,36 +3,54 @@ import { BookingRepository, bookingRepository } from '../repositories/booking.re
 import { ShowRepository, showRepository } from '../repositories/show.repository.js';
 import { BookingWithDetails, CreateBookingDTO } from '../types/booking.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
+import { holdService, HoldService } from './hold.service.js';
 
 export class BookingService {
   constructor(
     private repo: BookingRepository = bookingRepository,
-    private showRepo: ShowRepository = showRepository
+    private showRepo: ShowRepository = showRepository,
+    private holdSvc: HoldService = holdService
   ) {}
 
   /**
    * Books seats inside a PostgreSQL transaction using pessimistic row-level locking.
-   *
-   * The requested show-seat rows are locked with `SELECT ... FOR UPDATE` before checking
-   * availability so competing transactions cannot concurrently book the same seat successfully.
-   * Seat IDs are locked in sorted order to prevent circular wait deadlocks.
+   * Supports two booking paths:
+   * 1. Booking from a verified temporary seat hold (hold_id)
+   * 2. Direct booking (validates that no requested seat is held in Redis by another user)
    */
   async createBooking(userId: string, input: CreateBookingDTO): Promise<BookingWithDetails> {
-    const { show_id, show_seat_ids } = input;
+    let showId = input.show_id;
+    let seatIds = input.show_seat_ids;
+    let holdId = input.hold_id;
 
-    if (!show_seat_ids || show_seat_ids.length === 0) {
-      throw new BadRequestError('At least one seat must be selected for booking');
+    // Path 1: Booking using a verified temporary seat hold
+    if (holdId) {
+      const activeHold = await this.holdSvc.getHold(holdId, userId);
+      showId = activeHold.showId;
+      seatIds = activeHold.showSeatIds;
+    }
+
+    if (!showId || !seatIds || seatIds.length === 0) {
+      throw new BadRequestError('Show ID and at least one seat must be selected for booking');
     }
 
     // Ensure distinct seat IDs
-    const uniqueSeatIds = Array.from(new Set(show_seat_ids));
-    if (uniqueSeatIds.length !== show_seat_ids.length) {
+    const uniqueSeatIds = Array.from(new Set(seatIds));
+    if (uniqueSeatIds.length !== seatIds.length) {
       throw new BadRequestError('Duplicate seat IDs detected in request');
     }
 
-    const show = await this.showRepo.findById(show_id);
+    // Path 2: Direct booking without hold — ensure no seats are currently held in Redis
+    if (!holdId) {
+      const heldSeatIds = await this.holdSvc.getActiveHeldSeatIds(showId, uniqueSeatIds);
+      if (heldSeatIds.size > 0) {
+        throw new ConflictError('One or more selected seats are currently held by another customer');
+      }
+    }
+
+    const show = await this.showRepo.findById(showId);
     if (!show) {
-      throw new NotFoundError(`Show with ID ${show_id} not found`);
+      throw new NotFoundError(`Show with ID ${showId} not found`);
     }
 
     const createdBooking = await withTransaction(async (client) => {
@@ -45,8 +63,8 @@ export class BookingService {
 
       // 2. Validate show ownership and availability inside the locked transaction
       for (const seat of seats) {
-        if (seat.show_id !== show_id) {
-          throw new BadRequestError(`Seat ${seat.seat_label} does not belong to show ${show_id}`);
+        if (seat.show_id !== showId) {
+          throw new BadRequestError(`Seat ${seat.seat_label} does not belong to show ${showId}`);
         }
         if (seat.status !== 'AVAILABLE') {
           throw new ConflictError(`Seat ${seat.seat_label} is no longer available (${seat.status})`);
@@ -59,7 +77,7 @@ export class BookingService {
       // 4. Create booking record
       const booking = await this.repo.createBookingRecord(client, {
         user_id: userId,
-        show_id,
+        show_id: showId,
         total_amount: totalAmount,
         status: 'CONFIRMED',
       });
@@ -75,8 +93,7 @@ export class BookingService {
       const updatedCount = await this.repo.updateShowSeatsStatus(
         client,
         uniqueSeatIds,
-        'BOOKED',
-        'AVAILABLE'
+        'BOOKED'
       );
 
       if (updatedCount !== uniqueSeatIds.length) {
@@ -85,6 +102,13 @@ export class BookingService {
 
       return booking;
     });
+
+    // Clean up temporary hold from Redis if booking succeeded from hold
+    if (holdId) {
+      await this.holdSvc.releaseHold(holdId, userId).catch((err) => {
+        console.error(`[Hold Cleanup Warning] Failed to release hold ${holdId} after booking:`, err.message);
+      });
+    }
 
     const fullBooking = await this.repo.findById(createdBooking.id);
     if (!fullBooking) {
@@ -105,6 +129,9 @@ export class BookingService {
     delayMs = 50
   ): Promise<BookingWithDetails> {
     const { show_id, show_seat_ids } = input;
+    if (!show_id || !show_seat_ids || show_seat_ids.length === 0) {
+      throw new BadRequestError('Show ID and seat IDs are required');
+    }
     const uniqueSeatIds = Array.from(new Set(show_seat_ids));
 
     const createdBooking = await withTransaction(async (client) => {

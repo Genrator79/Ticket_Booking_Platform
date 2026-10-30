@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app';
 import { closePool, query } from '../src/db/index';
+import { closeRedis } from '../src/redis/index';
 import { env } from '../src/config/env';
 
 describe('Authentication & Security Integration Tests (M03)', () => {
@@ -23,6 +24,7 @@ describe('Authentication & Security Integration Tests (M03)', () => {
     // Clean up test user and close DB pool
     await query('DELETE FROM users WHERE LOWER(email) = LOWER($1)', [testUser.email]);
     await closePool();
+    await closeRedis();
   });
 
   describe('POST /api/auth/register', () => {

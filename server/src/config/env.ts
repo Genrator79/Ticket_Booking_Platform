@@ -11,6 +11,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().default('dev-jwt-super-secret-key-at-least-32-chars-long'),
   JWT_EXPIRES_IN: z.string().default('24h'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  SEAT_HOLD_TTL_SECONDS: z.string().default('600').transform((val) => parseInt(val, 10)),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

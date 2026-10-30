@@ -89,3 +89,26 @@
   - Verified monorepo production build succeeds via `npm run build` with zero TypeScript or bundling errors.
   - Created `docs/milestones/M07-redis.md` and updated `docs/solid/SOLID.md`.
 - **Status**: M07 Complete. All 55 tests passed. Production build clean. Awaiting user approval to proceed to M08 (Temporary Seat Holds).
+
+### 2026-10-30 - Milestone M08: Temporary Seat Holds Completed
+- **Milestone & Task**: M08 — Temporary Seat Holds / Redis TTL Leases, Atomic Lua Acquisition, State Overlay, Frontend Countdown
+- **Action**:
+  - Defined TypeScript contracts in `server/src/types/hold.ts` (`SeatHold`, `CreateHoldDTO`, `HoldResponse`) and updated `CreateBookingDTO`.
+  - Added configurable `SEAT_HOLD_TTL_SECONDS` (default: 600s = 10m) to `server/.env` and validated in `server/src/config/env.ts`.
+  - Implemented `HoldService` in `server/src/services/hold.service.ts`:
+    - Evaluates seat availability in PostgreSQL and verifies absence of permanent bookings.
+    - Executes atomic Redis Lua script to acquire multi-seat locks (`seat_hold:<showId>:<seatId>`) with TTL in an all-or-nothing manner, mathematically preventing partial reservations or cross-client interleaving.
+    - Persists hold metadata (`hold:<holdId>`) with matching expiration.
+    - Implemented `getHold` with strict user ownership validation (IDOR protection) and dynamic TTL calculation.
+    - Implemented `releaseHold` using Lua script to clean up individual seat keys and metadata.
+    - Implemented `getActiveHeldSeatIds` using batched `MGET` across show seat keys.
+  - Updated `ShowService.getShowSeatsLayout` in `server/src/services/show.service.ts` to overlay ephemeral Redis holds atop PostgreSQL rows, dynamically reporting active held seats as `HELD` and accurately decrementing `availableSeats`.
+  - Updated `BookingService.createBooking` in `server/src/services/booking.service.ts` to support both hold-based booking (verifying hold in Redis, updating PostgreSQL rows under row-level locks, and releasing Redis keys) and direct booking (blocking if seats are held in Redis).
+  - Built `HoldController` in `server/src/controllers/hold.controller.ts` and mounted authenticated endpoints (`POST /api/holds`, `GET /api/holds/:id`, `DELETE /api/holds/:id`) in `server/src/routes/hold.routes.ts`.
+  - Added reusable `validateParams` middleware in `server/src/middleware/validate.ts` supporting `ZodSchema` objects and effects.
+  - Built comprehensive integration test suite `server/tests/hold.test.ts` (9 tests) covering hold creation, double-hold 409 rejection, multi-seat atomicity, layout overlay, authorization checks, manual release, direct booking blocking, booking from hold, and 25-user concurrent hold stress testing.
+  - Enhanced frontend `MovieCatalog.tsx` with reservation hold button, live countdown timer (`formatTimer`), auto-expiration warning, and hold release action.
+  - Verified full test suite passes (64/64 tests across 8 suites) in 2.07s with zero open handle warnings.
+  - Verified production monorepo build succeeds cleanly (`npm run build`).
+  - Created `docs/milestones/M08-seat-holds.md` and updated `docs/solid/SOLID.md`.
+- **Status**: M08 Complete. All 64 tests passed. Production build clean. Awaiting user approval to proceed to M09 (Payment Simulation).

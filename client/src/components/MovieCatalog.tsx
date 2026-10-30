@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { movieService } from '../services/movieService';
 import { showService } from '../services/showService';
 import { bookingService } from '../services/bookingService';
+import { holdService } from '../services/holdService';
 import { authService } from '../services/authService';
 import type { Movie, Show, ShowSeat } from '../types/catalog';
 import type { BookingWithDetails } from '../types/booking';
+import type { SeatHold } from '../types/hold';
 
 export function MovieCatalog() {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -21,6 +23,11 @@ export function MovieCatalog() {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<BookingWithDetails | null>(null);
+
+  // Temporary Seat Hold state (M08)
+  const [activeHold, setActiveHold] = useState<SeatHold | null>(null);
+  const [holdRemainingSeconds, setHoldRemainingSeconds] = useState<number>(0);
+  const [holdingLoading, setHoldingLoading] = useState(false);
 
   // User booking history modal state
   const [myBookings, setMyBookings] = useState<BookingWithDetails[]>([]);
@@ -100,8 +107,80 @@ export function MovieCatalog() {
     }
   };
 
-  const handleConfirmBooking = async () => {
+  // Countdown timer for active temporary seat hold (M08)
+  useEffect(() => {
+    if (!activeHold || holdRemainingSeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setHoldRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setActiveHold(null);
+          setError('Seat reservation expired. Please select seats again.');
+          if (selectedShow) {
+            showService.getShowSeats(selectedShow.id).then(setSeatLayout).catch(() => {});
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeHold, holdRemainingSeconds, selectedShow]);
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handlePlaceHold = async () => {
     if (!selectedShow || selectedSeatIds.length === 0) return;
+    const token = authService.getToken();
+    if (!token) {
+      setError('Please log in above before reserving seats.');
+      return;
+    }
+
+    setHoldingLoading(true);
+    setError(null);
+
+    try {
+      const hold = await holdService.createHold({
+        show_id: selectedShow.id,
+        show_seat_ids: selectedSeatIds,
+      });
+
+      setActiveHold(hold);
+      setHoldRemainingSeconds(hold.expiresInSeconds);
+      const layout = await showService.getShowSeats(selectedShow.id);
+      setSeatLayout(layout);
+    } catch (err: any) {
+      setError(err.message || 'Failed to place seat hold');
+    } finally {
+      setHoldingLoading(false);
+    }
+  };
+
+  const handleReleaseHold = async () => {
+    if (!activeHold) return;
+    try {
+      await holdService.releaseHold(activeHold.holdId);
+    } catch {
+      // ignore
+    } finally {
+      setActiveHold(null);
+      setHoldRemainingSeconds(0);
+      setSelectedSeatIds([]);
+      if (selectedShow) {
+        showService.getShowSeats(selectedShow.id).then(setSeatLayout).catch(() => {});
+      }
+    }
+  };
+
+  const handleConfirmBooking = async () => {
+    if (!selectedShow) return;
 
     const token = authService.getToken();
     if (!token) {
@@ -114,14 +193,17 @@ export function MovieCatalog() {
     setBookingSuccessMsg(null);
 
     try {
-      const booking = await bookingService.createBooking({
-        show_id: selectedShow.id,
-        show_seat_ids: selectedSeatIds,
-      });
+      const payload = activeHold
+        ? { hold_id: activeHold.holdId }
+        : { show_id: selectedShow.id, show_seat_ids: selectedSeatIds };
+
+      const booking = await bookingService.createBooking(payload);
 
       setConfirmedBooking(booking);
       setBookingSuccessMsg(`Booking #${booking.id.slice(0, 8)} confirmed successfully!`);
       setSelectedSeatIds([]);
+      setActiveHold(null);
+      setHoldRemainingSeconds(0);
 
       // Refresh seat layout immediately so booked seats turn grey
       const refreshedLayout = await showService.getShowSeats(selectedShow.id);
@@ -405,24 +487,73 @@ export function MovieCatalog() {
                           })}
                       </div>
 
-                      {/* Checkout Action Panel (Section 12 & 23) */}
-                      {selectedSeatIds.length > 0 && (
-                        <div className="mt-8 w-full max-w-lg p-4 rounded-xl bg-slate-900 border border-indigo-500/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                          <div>
-                            <div className="text-xs text-slate-300">
-                              Selected: <span className="font-bold text-indigo-400">{selectedSeatsList.map((s) => s.seat_label).join(', ')}</span>
+                      {/* Checkout Action Panel with Redis Temporary Hold & Timer (M08) */}
+                      {(selectedSeatIds.length > 0 || activeHold) && (
+                        <div className="mt-8 w-full max-w-lg p-5 rounded-2xl bg-slate-900 border border-indigo-500/50 shadow-2xl flex flex-col gap-4">
+                          {activeHold ? (
+                            <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 flex items-center justify-between">
+                              <div className="flex items-center gap-2.5">
+                                <span className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                                </span>
+                                <div>
+                                  <div className="text-xs font-bold text-amber-200">Seats Temporarily Reserved</div>
+                                  <div className="text-[11px] text-amber-300/80">Expires in: <span className="font-mono font-bold text-white text-xs">{formatTimer(holdRemainingSeconds)}</span></div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={handleReleaseHold}
+                                className="px-2.5 py-1 text-[11px] font-medium text-amber-300 hover:text-white bg-amber-900/60 hover:bg-amber-800 rounded-lg transition-colors"
+                              >
+                                Release
+                              </button>
                             </div>
-                            <div className="text-lg font-extrabold text-white">
-                              Total: ${totalAmount.toFixed(2)}
+                          ) : null}
+
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs text-slate-300">
+                                Seats: <span className="font-bold text-indigo-400">
+                                  {activeHold
+                                    ? activeHold.seatLabels.join(', ')
+                                    : selectedSeatsList.map((s) => s.seat_label).join(', ')}
+                                </span>
+                              </div>
+                              <div className="text-lg font-extrabold text-white">
+                                Total: ${activeHold ? activeHold.totalAmount.toFixed(2) : totalAmount.toFixed(2)}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {!activeHold ? (
+                                <>
+                                  <button
+                                    onClick={handlePlaceHold}
+                                    disabled={holdingLoading || selectedSeatIds.length === 0}
+                                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white transition-all shadow-lg shadow-amber-600/30 disabled:opacity-50"
+                                  >
+                                    {holdingLoading ? 'Holding Seats...' : 'Hold (10m)'}
+                                  </button>
+                                  <button
+                                    onClick={handleConfirmBooking}
+                                    disabled={bookingLoading || selectedSeatIds.length === 0}
+                                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50"
+                                  >
+                                    {bookingLoading ? 'Booking...' : 'Direct Book'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={handleConfirmBooking}
+                                  disabled={bookingLoading}
+                                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg shadow-emerald-600/30 disabled:opacity-50"
+                                >
+                                  {bookingLoading ? 'Finalizing Booking...' : 'Confirm & Complete Booking'}
+                                </button>
+                              )}
                             </div>
                           </div>
-                          <button
-                            onClick={handleConfirmBooking}
-                            disabled={bookingLoading}
-                            className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50"
-                          >
-                            {bookingLoading ? 'Processing Booking...' : 'Book Selected Seats'}
-                          </button>
                         </div>
                       )}
                     </div>

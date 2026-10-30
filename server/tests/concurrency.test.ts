@@ -2,6 +2,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app';
 import { closePool, query } from '../src/db/index';
+import { closeRedis } from '../src/redis/index';
 import { env } from '../src/config/env';
 import { bookingService } from '../src/services/booking.service';
 
@@ -60,6 +61,7 @@ describe('Concurrency & Double-Booking Prevention Integration Tests (M06)', () =
     await query('DELETE FROM bookings WHERE user_id = ANY($1)', [userIds]);
     await query('DELETE FROM users WHERE id = ANY($1)', [userIds]);
     await closePool();
+    await closeRedis();
   });
 
   describe('1. Race Condition Demonstration (Without Pessimistic Locking)', () => {
