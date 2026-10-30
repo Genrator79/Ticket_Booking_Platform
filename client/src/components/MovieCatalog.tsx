@@ -3,10 +3,12 @@ import { movieService } from '../services/movieService';
 import { showService } from '../services/showService';
 import { bookingService } from '../services/bookingService';
 import { holdService } from '../services/holdService';
+import { paymentService } from '../services/paymentService';
 import { authService } from '../services/authService';
 import type { Movie, Show, ShowSeat } from '../types/catalog';
 import type { BookingWithDetails } from '../types/booking';
 import type { SeatHold } from '../types/hold';
+import type { PaymentReceipt } from '../types/payment';
 
 export function MovieCatalog() {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -28,6 +30,13 @@ export function MovieCatalog() {
   const [activeHold, setActiveHold] = useState<SeatHold | null>(null);
   const [holdRemainingSeconds, setHoldRemainingSeconds] = useState<number>(0);
   const [holdingLoading, setHoldingLoading] = useState(false);
+
+  // Payment simulation state (M09)
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [cardToken, setCardToken] = useState<string>('tok_visa_success');
+  const [lastReceipt, setLastReceipt] = useState<PaymentReceipt | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // User booking history modal state
   const [myBookings, setMyBookings] = useState<BookingWithDetails[]>([]);
@@ -176,6 +185,55 @@ export function MovieCatalog() {
       if (selectedShow) {
         showService.getShowSeats(selectedShow.id).then(setSeatLayout).catch(() => {});
       }
+    }
+  };
+
+  const handleProcessPayment = async () => {
+    if (!activeHold && selectedSeatIds.length === 0) return;
+    const token = authService.getToken();
+    if (!token) {
+      setError('Please log in above before processing payment.');
+      return;
+    }
+
+    setPaymentLoading(true);
+    setPaymentError(null);
+
+    try {
+      const receipt = await paymentService.processPayment({
+        hold_id: activeHold?.holdId,
+        card_token: cardToken,
+      });
+
+      setLastReceipt(receipt);
+
+      if (receipt.status === 'SUCCESS') {
+        setShowPaymentModal(false);
+        setActiveHold(null);
+        setHoldRemainingSeconds(0);
+        setSelectedSeatIds([]);
+        setBookingSuccessMsg(`Payment Confirmed! Ref: ${receipt.transactionReference}`);
+
+        const list = await bookingService.getMyBookings();
+        const latest = list.find((b) => b.id === receipt.bookingId);
+        if (latest) {
+          setConfirmedBooking(latest);
+        }
+
+        if (selectedShow) {
+          const refreshedLayout = await showService.getShowSeats(selectedShow.id);
+          setSeatLayout(refreshedLayout);
+        }
+      } else {
+        setPaymentError(receipt.failureReason || 'Payment declined by issuer');
+        if (selectedShow) {
+          showService.getShowSeats(selectedShow.id).then(setSeatLayout).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      setPaymentError(err.message || 'Payment processing failed');
+    } finally {
+      setPaymentLoading(false);
     }
   };
 
@@ -545,11 +603,13 @@ export function MovieCatalog() {
                                 </>
                               ) : (
                                 <button
-                                  onClick={handleConfirmBooking}
-                                  disabled={bookingLoading}
-                                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg shadow-emerald-600/30 disabled:opacity-50"
+                                  onClick={() => {
+                                    setShowPaymentModal(true);
+                                    setPaymentError(null);
+                                  }}
+                                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg shadow-emerald-600/30"
                                 >
-                                  {bookingLoading ? 'Finalizing Booking...' : 'Confirm & Complete Booking'}
+                                  Proceed to Payment (${activeHold.totalAmount.toFixed(2)})
                                 </button>
                               )}
                             </div>
@@ -562,6 +622,137 @@ export function MovieCatalog() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Payment Processing Modal (M09) */}
+      {showPaymentModal && activeHold && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full p-6 rounded-2xl bg-slate-900 border border-indigo-500/50 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-indigo-400 font-bold text-base">
+                <span>💳</span> Simulated Payment Gateway
+              </div>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                disabled={paymentLoading}
+                className="text-slate-400 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Summary */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1.5 text-xs text-slate-300">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Movie:</span>
+                <span className="font-semibold text-white">{selectedMovie?.title}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Reserved Seats:</span>
+                <span className="font-mono text-indigo-300 font-bold">{activeHold.seatLabels.join(', ')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Payable:</span>
+                <span className="text-sm font-extrabold text-emerald-400">${activeHold.totalAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Reservation Lease:</span>
+                <span className="font-mono text-amber-400">{formatTimer(holdRemainingSeconds)}</span>
+              </div>
+            </div>
+
+            {/* Simulated Payment Cards / Scenarios */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-300">Select Simulation Scenario:</label>
+              <div className="space-y-2">
+                <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${cardToken === 'tok_visa_success' ? 'bg-indigo-950/60 border-indigo-500' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="cardToken"
+                      value="tok_visa_success"
+                      checked={cardToken === 'tok_visa_success'}
+                      onChange={() => setCardToken('tok_visa_success')}
+                      className="text-indigo-600"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-slate-100">🟢 Visa Debit (Success)</div>
+                      <div className="text-[10px] text-slate-400">•••• 4242 · Normal approved transaction</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-emerald-400">200 OK</span>
+                </label>
+
+                <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${cardToken === 'tok_decline_insufficient_funds' ? 'bg-indigo-950/60 border-indigo-500' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="cardToken"
+                      value="tok_decline_insufficient_funds"
+                      checked={cardToken === 'tok_decline_insufficient_funds'}
+                      onChange={() => setCardToken('tok_decline_insufficient_funds')}
+                      className="text-indigo-600"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-slate-100">🔴 Card Declined (Simulation)</div>
+                      <div className="text-[10px] text-slate-400">•••• 0002 · Insufficient funds decline</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-rose-400">402 DECLINED</span>
+                </label>
+
+                <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${cardToken === 'tok_timeout' ? 'bg-indigo-950/60 border-indigo-500' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="cardToken"
+                      value="tok_timeout"
+                      checked={cardToken === 'tok_timeout'}
+                      onChange={() => setCardToken('tok_timeout')}
+                      className="text-indigo-600"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-slate-100">🟡 Gateway Timeout (Simulation)</div>
+                      <div className="text-[10px] text-slate-400">Simulates upstream bank network timeout</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-amber-400">TIMEOUT</span>
+                </label>
+              </div>
+            </div>
+
+            {paymentError && (
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-xs text-rose-300">
+                <span className="font-bold">Payment Error: </span>{paymentError}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                disabled={paymentLoading}
+                className="w-1/3 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleProcessPayment}
+                disabled={paymentLoading}
+                className="w-2/3 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg shadow-emerald-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {paymentLoading ? (
+                  <>
+                    <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
+                    Authorizing...
+                  </>
+                ) : (
+                  `Pay $${activeHold.totalAmount.toFixed(2)}`
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -586,6 +777,12 @@ export function MovieCatalog() {
                 <span className="text-slate-400">Booking ID:</span>
                 <span className="font-mono text-[11px] text-indigo-300">{confirmedBooking.id}</span>
               </div>
+              {lastReceipt?.transactionReference && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Transaction Ref:</span>
+                  <span className="font-mono text-[11px] text-emerald-400 font-bold">{lastReceipt.transactionReference}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-400">Movie:</span>
                 <span className="font-semibold text-white">{confirmedBooking.movie_title}</span>

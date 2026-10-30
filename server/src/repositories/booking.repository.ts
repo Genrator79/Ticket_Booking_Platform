@@ -89,7 +89,7 @@ export class BookingRepository {
       user_id: string;
       show_id: string;
       total_amount: number;
-      status?: 'PENDING' | 'CONFIRMED';
+      status?: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'CANCELLED';
     }
   ): Promise<Booking> {
     const sql = `
@@ -105,6 +105,25 @@ export class BookingRepository {
       status,
     ]);
     return result.rows[0];
+  }
+
+  /**
+   * Updates booking status (e.g. PENDING -> CONFIRMED, FAILED, or CANCELLED)
+   */
+  async updateBookingStatus(
+    bookingId: string,
+    status: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'CANCELLED' | 'EXPIRED',
+    client?: pg.PoolClient
+  ): Promise<Booking | null> {
+    const runner = client ? client.query.bind(client) : query;
+    const sql = `
+      UPDATE bookings
+      SET status = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `;
+    const res = await runner<Booking>(sql, [status, bookingId]);
+    return res.rows[0] || null;
   }
 
   /**

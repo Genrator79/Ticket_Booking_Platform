@@ -112,3 +112,24 @@
   - Verified production monorepo build succeeds cleanly (`npm run build`).
   - Created `docs/milestones/M08-seat-holds.md` and updated `docs/solid/SOLID.md`.
 - **Status**: M08 Complete. All 64 tests passed. Production build clean. Awaiting user approval to proceed to M09 (Payment Simulation).
+
+### 2026-10-30 - Milestone M09: Payment Simulation & Transactional Lifecycle Completed
+- **Milestone & Task**: M09 — Payment Simulation / Pluggable PaymentProvider (OCP & LSP), Mock Gateway, Transactional State Machine, Refunds, Frontend Payment Modal
+- **Action**:
+  - Designed pluggable `PaymentProvider` interface in `server/src/providers/payment/payment.provider.ts` and created `MockPaymentProvider` in `server/src/providers/payment/mock.provider.ts` supporting realistic simulation tokens (`tok_visa_success`, `tok_decline_insufficient_funds`, `tok_timeout`, `tok_fraud`), configurable delays, and refund processing.
+  - Defined payment types in `server/src/types/payment.ts` (`Payment`, `PaymentStatus`, `PaymentReceipt`, `ProcessPaymentDTO`, `RefundPaymentDTO`).
+  - Implemented `PaymentRepository` in `server/src/repositories/payment.repository.ts` managing CRUD operations and status updates on `payments` table.
+  - Added `updateBookingStatus` to `server/src/repositories/booking.repository.ts` to manage lifecycle transitions (`PENDING`, `CONFIRMED`, `FAILED`, `CANCELLED`).
+  - Built `PaymentService` in `server/src/services/payment.service.ts`:
+    - Processes payments for active holds or existing bookings inside atomic PostgreSQL transactions.
+    - Manages state machine: `PENDING` -> `SUCCESS` (confirms booking, marks seats `BOOKED`, cleans up Redis holds) or `FAILED` (marks booking `FAILED`, unlocks seats to `AVAILABLE`, releases holds).
+    - Implemented `processRefund` allowing customers to refund confirmed bookings, cancelling the booking and returning seats to the public inventory.
+    - Implemented `getPaymentById` and `getPaymentsByBookingId` with strict IDOR ownership enforcement.
+    - Implemented `handleWebhook` processing asynchronous `payment.succeeded` events.
+  - Implemented Zod validation schemas in `server/src/validations/payment.validation.ts`, controller in `server/src/controllers/payment.controller.ts`, and mounted authenticated routes (`/api/payments/process`, `/:id`, `/booking/:bookingId`, `/:id/refund`) and public webhook (`/webhook`) in `server/src/routes/payment.routes.ts`.
+  - Created integration test suite `server/tests/payment.test.ts` (8 tests) covering successful payment from hold, card decline simulations (402), gateway timeouts, double payment prevention (409), IDOR authorization, refund seat restoration, and webhook processing.
+  - Built frontend payment contracts (`client/src/types/payment.ts`), API service (`client/src/services/paymentService.ts`), and integrated Payment Processing Modal in `client/src/components/MovieCatalog.tsx` allowing users to select simulation scenarios (Visa Success, Declined, Timeout) and view receipts with transaction references.
+  - Verified full test suite passes (72/72 tests across 9 suites) in 2.29s with zero open handle warnings.
+  - Verified production monorepo build succeeds cleanly (`npm run build`).
+  - Created `docs/milestones/M09-payment.md` and updated `docs/solid/SOLID.md` (OCP & LSP applied).
+- **Status**: M09 Complete. All 72 tests passed. Production build clean. Awaiting user approval to proceed to M10 (Idempotency).

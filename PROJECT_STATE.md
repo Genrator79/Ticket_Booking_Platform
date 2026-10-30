@@ -4,13 +4,13 @@
 High-Concurrency Ticket Booking Platform (SeatForge)
 
 ## Current Milestone
-M08 — Temporary Seat Holds
+M09 — Payment Simulation
 
 ## Milestone Status
 COMPLETED
 
 ## Current Task
-Milestone M08 finalized, verified, and awaiting explicit user approval before starting M09 (Payment Simulation).
+Milestone M09 finalized, verified, and awaiting explicit user approval before starting M10 (Idempotency).
 
 ## Task Checklist
 - [x] M01 — Project Setup (Verified)
@@ -20,75 +20,67 @@ Milestone M08 finalized, verified, and awaiting explicit user approval before st
 - [x] M05 — Basic Booking (Verified)
 - [x] M06 — Concurrency and Double-Booking Prevention (Verified)
 - [x] M07 — Redis Infrastructure & Service Layer (Verified)
-- [x] Define TypeScript contracts for holds in `server/src/types/hold.ts` and update `booking.ts`
-- [x] Add configurable `SEAT_HOLD_TTL_SECONDS` to `.env` and `env.ts`
-- [x] Implement atomic multi-seat hold acquisition via Redis Lua script in `HoldService`
-- [x] Implement hold retrieval (`getHold`) with strict IDOR ownership checks and dynamic TTL calculation
-- [x] Implement instant hold release (`releaseHold`) via Redis Lua cleanup script
-- [x] Update `ShowService.getShowSeatsLayout` to dynamically overlay active Redis holds as `HELD`
-- [x] Update `BookingService.createBooking` to consume verified holds and block direct booking of held seats
-- [x] Implement `HoldController` and mount authenticated routes (`POST /api/holds`, `GET /api/holds/:id`, `DELETE /api/holds/:id`)
-- [x] Build comprehensive integration test suite (`server/tests/hold.test.ts`) with 9 tests including a 25-user concurrent hold stress test
-- [x] Enhance frontend `MovieCatalog.tsx` with reservation hold action, live countdown timer, and release action
-- [x] Document system design, architecture, and interview Q&A in `docs/milestones/M08-seat-holds.md`
+- [x] M08 — Temporary Seat Holds (Verified)
+- [x] Define payment types and receipts in `server/src/types/payment.ts`
+- [x] Implement pluggable `PaymentProvider` interface (OCP & LSP) in `server/src/providers/payment/payment.provider.ts`
+- [x] Build `MockPaymentProvider` supporting simulation tokens (Success, Declined, Timeout, Fraud) and refunds
+- [x] Implement `PaymentRepository` in `server/src/repositories/payment.repository.ts` for database CRUD
+- [x] Implement `PaymentService` managing transactional state machine (`PENDING` -> `SUCCESS` | `FAILED` | `REFUNDED`), seat reconciliation, and refunds
+- [x] Implement payment controller, Zod validations, and routes (`POST /process`, `GET /:id`, `GET /booking/:bookingId`, `POST /:id/refund`, `POST /webhook`)
+- [x] Build comprehensive integration test suite (`server/tests/payment.test.ts`) with 8 tests
+- [x] Integrate frontend payment contracts, service, and Payment Simulation Modal in `client/src/components/MovieCatalog.tsx`
+- [x] Document system design, architecture, and interview Q&A in `docs/milestones/M09-payment.md`
 - [x] Update `docs/solid/SOLID.md` and `PROJECT_LOG.md`
-- [x] Verify full test suite (64/64 passed) and production builds (0 errors)
-- [x] Complete M08 verification and set awaiting approval
+- [x] Verify full test suite (72/72 passed) and production builds (0 errors)
+- [x] Complete M09 verification and set awaiting approval
 
 ## Verified Results
-- Automated Tests (`npm test`): PASS (64/64 tests passed across 8 test suites: `concurrency.test.ts`, `auth.test.ts`, `crud.test.ts`, `hold.test.ts`, `booking.test.ts`, `db.test.ts`, `health.test.ts`, `redis.test.ts`)
+- Automated Tests (`npm test`): PASS (72/72 tests passed across 9 test suites: `payment.test.ts`, `concurrency.test.ts`, `auth.test.ts`, `hold.test.ts`, `booking.test.ts`, `crud.test.ts`, `health.test.ts`, `db.test.ts`, `redis.test.ts`)
 - Production Monorepo Build (`npm run build`): PASS (Zero errors across client and server)
-- Atomic Multi-Seat Hold: PASS (Redis Lua script guarantees all-or-nothing hold acquisition with zero partial state)
-- TTL Expiration & Auto-Eviction: PASS (Seat keys auto-expire and restore availability without background pollers)
-- Dynamic Layout Overlay: PASS (`GET /api/shows/:showId/seats` renders active Redis holds as `HELD` and decrements available tally)
-- Hold-to-Booking Conversion: PASS (Booking confirmed under DB transaction with automatic Redis cleanup)
-- Concurrency Stress Test: PASS (25 simultaneous users competing for 1 seat yields exactly 1 winner with 201, 24 with 409 Conflict)
+- Pluggable Gateway Architecture: PASS (Strategy pattern adhering to OCP and LSP)
+- Successful Payment from Hold: PASS (Creates confirmed booking, locks seats to `BOOKED`, cleans up Redis hold keys)
+- Card Decline Simulation: PASS (Returns 402 with failure diagnostics, reverts seats to `AVAILABLE`, releases holds)
+- Refund Lifecycle: PASS (Refund cancels booking and restores seats to public inventory)
+- Webhook Processing: PASS (Asynchronous `payment.succeeded` updates payment and confirms booking)
+- Frontend Modal: PASS (Payment simulation modal with test card scenarios and transaction receipts)
 
 ## Current Blockers
 None.
 
 ## Last Completed Action
-Verified all M08 Temporary Seat Holds features, automated integration tests, UI countdown timer, production monorepo builds, documentation, and persistent tracking files.
+Verified all M09 Payment Simulation features, automated integration tests, frontend payment modal, production monorepo builds, documentation, and persistent tracking files.
 
 ## Exact Next Action
-Wait for user approval to start M09 (Payment Simulation: simulated payment gateway provider, payment processing endpoints, webhook/callback handler, payment states, and refund handling).
+Wait for user approval to start M10 (Idempotency: idempotency middleware with Redis/PostgreSQL caching, duplicate request deduplication, concurrent in-flight request locking, and retry safety).
 
 ## Files Changed
-- `server/.env`
-- `server/src/config/env.ts`
-- `server/src/types/hold.ts`
-- `server/src/types/booking.ts`
-- `server/src/validations/hold.validation.ts`
-- `server/src/validations/booking.validation.ts`
-- `server/src/middleware/validate.ts`
-- `server/src/services/hold.service.ts`
-- `server/src/services/show.service.ts`
-- `server/src/services/booking.service.ts`
-- `server/src/controllers/hold.controller.ts`
-- `server/src/routes/hold.routes.ts`
+- `server/src/types/payment.ts`
+- `server/src/providers/payment/payment.provider.ts`
+- `server/src/providers/payment/mock.provider.ts`
+- `server/src/repositories/payment.repository.ts`
+- `server/src/repositories/booking.repository.ts`
+- `server/src/services/payment.service.ts`
+- `server/src/validations/payment.validation.ts`
+- `server/src/controllers/payment.controller.ts`
+- `server/src/routes/payment.routes.ts`
 - `server/src/routes/index.ts`
-- `server/tests/hold.test.ts`
-- `server/tests/booking.test.ts`
-- `server/tests/concurrency.test.ts`
-- `server/tests/crud.test.ts`
-- `server/tests/auth.test.ts`
-- `client/src/types/hold.ts`
-- `client/src/types/booking.ts`
-- `client/src/services/holdService.ts`
+- `server/tests/payment.test.ts`
+- `client/src/types/payment.ts`
+- `client/src/services/paymentService.ts`
 - `client/src/components/MovieCatalog.tsx`
-- `docs/milestones/M08-seat-holds.md`
+- `docs/milestones/M09-payment.md`
 - `docs/solid/SOLID.md`
 - `PROJECT_STATE.md`
 - `PROJECT_LOG.md`
 
 ## Important Decisions
-- **Ephemeral Lease Tier via Redis**: In-memory seat holds shield PostgreSQL from write churn, WAL expansion, and table bloat during high-traffic ticket drops.
-- **Atomic Multi-Seat Lua Script**: Acquisition of multiple seats executes in a single Redis Lua script, guaranteeing that either all requested seats are held or none are, preventing partial reservations and cross-client deadlocks.
-- **Zero-Poll Overlay Pattern**: Availability endpoints merge permanent PostgreSQL rows with active Redis hold keys on read, eliminating the need for periodic database polling or cleaner cron jobs.
-- **Two-Phase Hold-and-Confirm Lifecycle**: Separating seat reservation from payment confirmation mirrors real-world ticketing architectures (BookMyShow, Ticketmaster).
+- **Strategy Pattern for Payment Gateways (OCP & LSP)**: `PaymentProvider` defines a stable contract; `MockPaymentProvider` implements mock payment behavior without tight coupling.
+- **Transactional State Machine**: Payment records, booking records, and show-seat availability transitions occur inside atomic database transactions (`withTransaction`), guaranteeing zero partial states.
+- **Reversible Holds on Payment Decline**: When a card is declined or times out, temporary holds are released and database seats revert to `AVAILABLE`, preventing artificial inventory lockups.
+- **Webhook Reconciliation**: The webhook endpoint processes asynchronous gateway notifications to synchronize out-of-band payment confirmations.
 
 ## Next Milestone
-M09 — Payment Simulation
+M10 — Idempotency
 
 ## Approval Status
 AWAITING_USER_APPROVAL: YES
