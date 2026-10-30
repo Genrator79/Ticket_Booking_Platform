@@ -10,6 +10,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default('postgresql://localhost:5432/ticket_booking'),
   JWT_SECRET: z.string().default('dev-jwt-super-secret-key-at-least-32-chars-long'),
   JWT_EXPIRES_IN: z.string().default('24h'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

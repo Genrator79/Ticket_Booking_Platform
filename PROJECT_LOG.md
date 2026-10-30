@@ -72,3 +72,20 @@
   - Updated `server/package.json` test script with `--runInBand` to prevent parallel test state collisions. All 46 tests across 6 suites passed (2.081s).
   - Documented SOLID review in `docs/solid/SOLID.md` and created `docs/milestones/M06-concurrency.md` with interview Q&A.
 - **Status**: M06 Complete. All 46 tests passed. Awaiting user approval to proceed to M07 (Redis).
+
+### 2026-10-30 - Milestone M07: Redis Infrastructure & Service Layer Completed
+- **Milestone & Task**: M07 — Redis / Client Configuration, Typed Service Layer, Health Monitoring, Integration Tests
+- **Action**:
+  - Installed Redis server (v8.10.3) via Homebrew and started background service.
+  - Installed `ioredis` dependency in `server` workspace.
+  - Added `REDIS_URL` to `server/.env` and validated via Zod schema in `server/src/config/env.ts`.
+  - Built connection client in `server/src/redis/index.ts` with exponential backoff retry strategy, health check `checkRedisConnection()`, graceful shutdown `closeRedis()`, and a lazy Proxy to prevent eager socket binding on import.
+  - Built `RedisService` in `server/src/redis/redis.service.ts` providing typed methods: `get`, `getJSON`, `set`, `setJSON`, `setNX` (atomic conditional set with TTL), `del`, `exists`, `ttl`, `expire`, `incr`, `incrBy`, and `flushAll`.
+  - Updated `server/src/controllers/health.controller.ts` to probe both PostgreSQL and Redis concurrently, returning degraded status if either service is down.
+  - Updated `client/src/types/api.ts` and `client/src/components/HealthStatus.tsx` to render real-time Redis connectivity status.
+  - Created integration test suite in `server/tests/redis.test.ts` testing string storage, JSON serialization round-trips, TTL enforcement, atomic `setNX` mutual exclusion, multi-key deletion, and atomic increment counters.
+  - Updated `server/tests/health.test.ts` to assert `database: 'CONNECTED'` and `redis: 'CONNECTED'`.
+  - Verified all 55 tests pass across 7 test suites via `npm test` with zero open handle warnings.
+  - Verified monorepo production build succeeds via `npm run build` with zero TypeScript or bundling errors.
+  - Created `docs/milestones/M07-redis.md` and updated `docs/solid/SOLID.md`.
+- **Status**: M07 Complete. All 55 tests passed. Production build clean. Awaiting user approval to proceed to M08 (Temporary Seat Holds).

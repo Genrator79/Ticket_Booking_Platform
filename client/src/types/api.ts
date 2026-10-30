@@ -9,6 +9,7 @@ export interface HealthCheckData {
   status: string;
   service: string;
   database?: string;
+  redis?: string;
   timestamp: string;
   uptime: number;
   environment: string;

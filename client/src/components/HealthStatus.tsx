@@ -141,6 +141,15 @@ export function HealthStatus() {
 
           <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
             <span className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+              Redis
+            </span>
+            <span className={`text-base font-semibold ${health.redis === 'CONNECTED' ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {health.redis || 'UNKNOWN'}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+            <span className="block text-[11px] font-medium text-slate-400 uppercase tracking-wider">
               Heap Used
             </span>
             <span className="text-base font-semibold text-slate-100">

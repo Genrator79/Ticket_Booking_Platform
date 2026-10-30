@@ -4,13 +4,13 @@
 High-Concurrency Ticket Booking Platform (SeatForge)
 
 ## Current Milestone
-M06 — Concurrency and Double-Booking Prevention
+M07 — Redis
 
 ## Milestone Status
 COMPLETED
 
 ## Current Task
-Milestone M06 finalized, verified, and awaiting explicit user approval before starting M07 (Redis).
+Milestone M07 finalized, verified, and awaiting explicit user approval before starting M08 (Temporary Seat Holds).
 
 ## Task Checklist
 - [x] M01 — Project Setup (Verified)
@@ -18,54 +18,61 @@ Milestone M06 finalized, verified, and awaiting explicit user approval before st
 - [x] M03 — Authentication (Verified)
 - [x] M04 — Basic CRUD (Verified)
 - [x] M05 — Basic Booking (Verified)
-- [x] Implement `getShowSeatsForUpdate` in `BookingRepository` with `FOR UPDATE OF ss` and deterministic ID sorting
-- [x] Update `BookingService` to utilize row-level locking inside transactions
-- [x] Add optimistic version checking (`version = version + 1`) to `show_seats` update
-- [x] Implement `createBookingWithoutLocking` test helper to demonstrate race condition
-- [x] Write dedicated high-concurrency test suite (`server/tests/concurrency.test.ts`)
-- [x] Test 50+ concurrent requests competing for the exact same seat (asserting exactly 1 winner, 0 double bookings, 49 conflicts)
-- [x] Test multi-seat contention with overlapping seats (asserting deadlock-free execution)
-- [x] Verify atomic transaction rollback on partial availability failure
-- [x] Document interview Q&A and system design analysis in `docs/milestones/M06-concurrency.md`
-- [x] Update `docs/solid/SOLID.md` and progress tracking files
-- [x] Verify test suite (46/46 passed) and production builds (0 errors)
-- [x] Complete M06 verification and set awaiting approval
+- [x] M06 — Concurrency and Double-Booking Prevention (Verified)
+- [x] Install Redis server and configure background service
+- [x] Add `ioredis` to server workspace and update environment schemas with `REDIS_URL`
+- [x] Implement Redis connection client with retry strategy, lifecycle handling, and lazy proxy in `server/src/redis/index.ts`
+- [x] Implement typed `RedisService` in `server/src/redis/redis.service.ts` (`get`, `set`, `setJSON`, `setNX`, `del`, `exists`, `ttl`, `incr`, etc.)
+- [x] Extend `GET /api/health` to concurrently probe PostgreSQL and Redis connectivity
+- [x] Update frontend `HealthStatus` component and types to display Redis connectivity status
+- [x] Build comprehensive Redis test suite (`server/tests/redis.test.ts`) testing string/JSON storage, TTL expiration, atomic `setNX`, and counters
+- [x] Update `health.test.ts` to assert dual storage connectivity
+- [x] Document system design, architecture, and interview Q&A in `docs/milestones/M07-redis.md`
+- [x] Update `docs/solid/SOLID.md` and `PROJECT_LOG.md`
+- [x] Verify full test suite (55/55 passed) and production builds (0 errors)
+- [x] Complete M07 verification and set awaiting approval
 
 ## Verified Results
-- Automated Tests (`npm test`): PASS (46/46 tests passed across 6 test suites: `db.test.ts`, `health.test.ts`, `auth.test.ts`, `crud.test.ts`, `booking.test.ts`, `concurrency.test.ts`)
+- Automated Tests (`npm test`): PASS (55/55 tests passed across 7 test suites: `redis.test.ts`, `concurrency.test.ts`, `auth.test.ts`, `booking.test.ts`, `crud.test.ts`, `db.test.ts`, `health.test.ts`)
 - Production Monorepo Build (`npm run build`): PASS (Zero errors across client and server)
-- Race Condition Demonstration: PASS (Proved duplicate booking occurs when row locking is omitted)
-- 50-User Concurrent Single-Seat Contention: PASS (1 winner with 201 Created, 49 conflicts with 409 Conflict, exactly 1 database booking, 0 double bookings)
-- Deadlock Elimination: PASS (Sorted UUID ordering successfully prevented PostgreSQL 40P01 circular deadlocks)
-- Atomic Rollback: PASS (Transactions cleanly rollback when any seat in a multi-seat request is unavailable)
+- Redis Service Methods: PASS (All core key/value, JSON, TTL, multi-key del, and atomic increment operations verified)
+- Atomic SETNX Concurrency Primitive: PASS (Acquisition locks successfully on empty key, rejects simultaneous attempts on identical key, unlocks upon del)
+- System Health Dual-Probe: PASS (`GET /api/health` asserts both `database: CONNECTED` and `redis: CONNECTED`)
+- Frontend Dashboard: PASS (Displays live Redis status badge alongside PostgreSQL)
 
 ## Current Blockers
 None.
 
 ## Last Completed Action
-Verified all M06 Concurrency and Double-Booking Prevention features, automated stress tests, full-stack build checks, SOLID documentation, and persistent tracking files.
+Verified all M07 Redis infrastructure features, automated service tests, dual health monitoring, production monorepo builds, documentation, and persistent tracking files.
 
 ## Exact Next Action
-Wait for user approval to start M07 (Redis: Redis client configuration, Redis service module with GET/SET/DEL/TTL/atomic operations, connection health probe, and tests).
+Wait for user approval to start M08 (Temporary Seat Holds: Seat hold endpoint with Redis TTL leases, atomic multi-seat reservation via SETNX/Lua script, auto-release mechanism, and conflict handling).
 
 ## Files Changed
-- `server/src/repositories/booking.repository.ts`
-- `server/src/services/booking.service.ts`
-- `server/src/types/booking.ts`
+- `server/.env`
 - `server/package.json`
-- `server/tests/concurrency.test.ts`
-- `docs/milestones/M06-concurrency.md`
+- `server/src/config/env.ts`
+- `server/src/redis/index.ts`
+- `server/src/redis/redis.service.ts`
+- `server/src/controllers/health.controller.ts`
+- `server/tests/health.test.ts`
+- `server/tests/redis.test.ts`
+- `client/src/types/api.ts`
+- `client/src/components/HealthStatus.tsx`
+- `docs/milestones/M07-redis.md`
 - `docs/solid/SOLID.md`
 - `PROJECT_STATE.md`
 - `PROJECT_LOG.md`
 
 ## Important Decisions
-- **Pessimistic Row-Level Locking**: `SELECT ... FOR UPDATE OF ss` locks target rows at the database level, serializing concurrent writes without requiring fragile application-level mutexes.
-- **Deterministic Lock Ordering**: All seat IDs are sorted alphabetically/lexicographically by UUID before acquiring locks, mathematically eliminating circular wait deadlocks.
-- **Conditional Atomic Writes**: `UPDATE show_seats SET status = 'BOOKED', version = version + 1 WHERE id = ANY($1) AND status = 'AVAILABLE'` provides defense-in-depth against concurrent state mutations.
+- **In-Memory Fast Tier**: Redis acts as an ephemeral cache and concurrency coordination layer, shielding PostgreSQL from high-frequency hold/release thrashing during peak ticket drops.
+- **Atomic Conditional SETNX**: Used `SET key val EX ttl NX` as the distributed locking and temporary seat hold primitive, guaranteeing mutual exclusion with zero lock leaks.
+- **Lazy Proxy Initialization**: Redis client uses a JavaScript Proxy to defer TCP socket connection until invoked, preventing eager network connections on module import and eliminating open handle warnings in unit tests.
+- **Exponential Backoff**: Redis connection client retries connection on transient network failures with exponential backoff (capped at 2s), while fast-bailing in test environments.
 
 ## Next Milestone
-M07 — Redis
+M08 — Temporary Seat Holds
 
 ## Approval Status
 AWAITING_USER_APPROVAL: YES
