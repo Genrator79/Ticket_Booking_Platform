@@ -339,3 +339,4 @@ describe('M10 — Idempotency Integration Tests', () => {
     expect(await redisService.exists(`idemp:resp:${testUser.id}:${idempotencyKey}`)).toBe(true);
   });
 });
+

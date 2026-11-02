@@ -120,3 +120,4 @@ Milestone M10 implements a production-grade, two-tier idempotency system with in
 
 ### Q3: What happens if the server crashes while holding the in-flight lock?
 > **Answer**: The distributed lock has an automatic TTL expiration (60 seconds in Redis). If the node dies mid-execution, the lock expires automatically, allowing subsequent client retries to proceed rather than remaining permanently locked out.
+
