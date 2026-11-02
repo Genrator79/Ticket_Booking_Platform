@@ -5,9 +5,17 @@ import type { PaymentReceipt, ProcessPaymentPayload, RefundPayload } from '../ty
 export const paymentService = {
   /**
    * Processes a simulated payment charge for an active hold or booking.
+   * Sends an Idempotency-Key header to prevent duplicate charges upon retries.
    */
-  async processPayment(payload: ProcessPaymentPayload): Promise<PaymentReceipt> {
-    const res = await api.post<ApiResponse<PaymentReceipt>>('/payments/process', payload);
+  async processPayment(
+    payload: ProcessPaymentPayload,
+    idempotencyKey?: string
+  ): Promise<PaymentReceipt> {
+    const key = idempotencyKey || payload.idempotency_key;
+    const headers = key ? { 'Idempotency-Key': key } : undefined;
+    const res = await api.post<ApiResponse<PaymentReceipt>>('/payments/process', payload, {
+      headers,
+    });
     return res.data.data!;
   },
 

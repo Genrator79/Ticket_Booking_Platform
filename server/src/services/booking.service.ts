@@ -80,6 +80,7 @@ export class BookingService {
         show_id: showId,
         total_amount: totalAmount,
         status: 'CONFIRMED',
+        idempotency_key: input.idempotency_key,
       });
 
       // 5. Create itemized booking_seats records

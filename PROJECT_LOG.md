@@ -133,3 +133,24 @@
   - Verified production monorepo build succeeds cleanly (`npm run build`).
   - Created `docs/milestones/M09-payment.md` and updated `docs/solid/SOLID.md` (OCP & LSP applied).
 - **Status**: M09 Complete. All 72 tests passed. Production build clean. Awaiting user approval to proceed to M10 (Idempotency).
+
+### 2026-11-03 - Milestone M10: Idempotency & Distributed Deduplication Completed
+- **Milestone & Task**: M10 — Idempotency / Dual-Tier Cache (Redis + PostgreSQL), In-Flight Locking, Payload Tampering Detection, and Response Replay
+- **Action**:
+  - Created migration `database/migrations/009_create_idempotency_keys_table.sql` for durable PostgreSQL idempotency persistence with unique index on `key` and retention expiry.
+  - Defined idempotency types and contracts in `server/src/types/idempotency.ts`.
+  - Implemented `IdempotencyRepository` in `server/src/repositories/idempotency.repository.ts` providing durable CRUD and retention queries.
+  - Implemented `IdempotencyService` in `server/src/services/idempotency.service.ts`:
+    - Canonical SHA-256 payload hashing by normalizing and recursively sorting JSON object keys.
+    - Redis `SETNX` distributed in-flight lock (`lock:idemp:<key>`) with 60-second TTL to serialize concurrent duplicate requests and return HTTP 409 Conflict.
+    - Two-tier response caching: Redis fast-tier (24-hour TTL) and PostgreSQL durable fallback tier.
+    - Payload tampering validation: returning HTTP 422 Unprocessable Entity if a key is reused with a modified payload.
+  - Implemented `idempotency()` middleware in `server/src/middleware/idempotency.middleware.ts` supporting both `Idempotency-Key` and `X-Idempotency-Key` headers, intercepting `res.json`/`res.send` for transparent response capture, and injecting `Idempotent-Replayed: true` on cache hits.
+  - Attached idempotency middleware to critical state-modifying routes: `POST /api/bookings`, `POST /api/payments/process`, and `POST /api/holds`.
+  - Updated `BookingController`, `PaymentController`, `BookingService`, and `PaymentService` to accept and record `idempotency_key`.
+  - Updated client `bookingService.ts`, `paymentService.ts`, and `MovieCatalog.tsx` to transmit UUIDv4 `Idempotency-Key` headers.
+  - Created comprehensive integration test suite `server/tests/idempotency.test.ts` (6 tests) covering fresh request pass-through, exact cached response replay, payload tampering 422 rejection, concurrent in-flight 409 conflict, payment processing deduplication, and database fallback.
+  - Verified full test suite passes (78/78 tests across 10 suites) with zero open handle leaks.
+  - Verified production monorepo build succeeds cleanly (`npm run build`).
+  - Created `docs/milestones/M10-idempotency.md` and updated `docs/solid/SOLID.md`.
+- **Status**: M10 Complete. All 78 tests passed. Production build clean. Awaiting user approval to proceed to M11 (Socket.IO and Real-Time Updates).

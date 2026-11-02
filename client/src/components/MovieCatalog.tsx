@@ -200,10 +200,14 @@ export function MovieCatalog() {
     setPaymentError(null);
 
     try {
-      const receipt = await paymentService.processPayment({
-        hold_id: activeHold?.holdId,
-        card_token: cardToken,
-      });
+      const idempotencyKey = `pay_${activeHold?.holdId || Date.now()}`;
+      const receipt = await paymentService.processPayment(
+        {
+          hold_id: activeHold?.holdId,
+          card_token: cardToken,
+        },
+        idempotencyKey
+      );
 
       setLastReceipt(receipt);
 

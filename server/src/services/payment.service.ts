@@ -51,6 +51,7 @@ export class PaymentService {
           show_id: activeHold.showId,
           total_amount: totalAmount,
           status: 'PENDING',
+          idempotency_key: idempotency_key ? `booking_${idempotency_key}` : undefined,
         });
 
         const seatItems = seats.map((s) => ({

@@ -9,7 +9,11 @@ export class BookingController {
         throw new UnauthorizedError('Authentication required to create a booking');
       }
 
-      const booking = await bookingService.createBooking(req.user.userId, req.body);
+      const input = {
+        ...req.body,
+        idempotency_key: req.idempotencyKey || req.body?.idempotency_key,
+      };
+      const booking = await bookingService.createBooking(req.user.userId, input);
 
       res.status(201).json({
         success: true,

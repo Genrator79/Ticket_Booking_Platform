@@ -90,11 +90,12 @@ export class BookingRepository {
       show_id: string;
       total_amount: number;
       status?: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'CANCELLED';
+      idempotency_key?: string | null;
     }
   ): Promise<Booking> {
     const sql = `
-      INSERT INTO bookings (user_id, show_id, total_amount, status)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO bookings (user_id, show_id, total_amount, status, idempotency_key)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
     const status = data.status || 'CONFIRMED';
@@ -103,6 +104,7 @@ export class BookingRepository {
       data.show_id,
       data.total_amount,
       status,
+      data.idempotency_key || null,
     ]);
     return result.rows[0];
   }

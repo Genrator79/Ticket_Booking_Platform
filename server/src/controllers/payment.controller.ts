@@ -4,7 +4,11 @@ import { paymentService } from '../services/payment.service.js';
 export class PaymentController {
   async processPayment(req: Request, res: Response): Promise<void> {
     const userId = req.user!.userId;
-    const receipt = await paymentService.processPayment(userId, req.body);
+    const input = {
+      ...req.body,
+      idempotency_key: req.idempotencyKey || req.body?.idempotency_key,
+    };
+    const receipt = await paymentService.processPayment(userId, input);
 
     const isSuccess = receipt.status === 'SUCCESS';
     res.status(isSuccess ? 200 : 402).json({

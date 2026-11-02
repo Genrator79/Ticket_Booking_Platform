@@ -5,9 +5,15 @@ import type { BookingWithDetails, CreateBookingPayload } from '../types/booking'
 export const bookingService = {
   /**
    * Submits a booking request for selected show seats.
+   * Sends an Idempotency-Key header to prevent duplicate bookings upon retries.
    */
-  async createBooking(payload: CreateBookingPayload): Promise<BookingWithDetails> {
-    const res = await api.post<ApiResponse<BookingWithDetails>>('/bookings', payload);
+  async createBooking(
+    payload: CreateBookingPayload,
+    idempotencyKey?: string
+  ): Promise<BookingWithDetails> {
+    const key = idempotencyKey || payload.idempotency_key;
+    const headers = key ? { 'Idempotency-Key': key } : undefined;
+    const res = await api.post<ApiResponse<BookingWithDetails>>('/bookings', payload, { headers });
     if (!res.data.data) {
       throw new Error(res.data.message || 'Booking creation failed');
     }

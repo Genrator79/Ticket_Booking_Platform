@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { bookingController } from '../controllers/booking.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validate.js';
+import { idempotency } from '../middleware/idempotency.middleware.js';
 import { createBookingSchema } from '../validations/booking.validation.js';
 
 const router = Router();
@@ -11,10 +12,10 @@ router.use(authenticate);
 
 /**
  * @route   POST /api/bookings
- * @desc    Create a new booking for selected seats
+ * @desc    Create a new booking for selected seats (Idempotent)
  * @access  Private
  */
-router.post('/', validateBody(createBookingSchema), (req, res, next) =>
+router.post('/', idempotency(), validateBody(createBookingSchema), (req, res, next) =>
   bookingController.create(req, res, next)
 );
 

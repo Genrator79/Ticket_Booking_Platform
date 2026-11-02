@@ -44,5 +44,6 @@ export interface CreateBookingDTO {
   show_id?: string;
   show_seat_ids?: string[];
   hold_id?: string;
+  idempotency_key?: string;
 }
 
