@@ -48,3 +48,4 @@ export interface SocketData {
   email?: string;
   role?: string;
 }
+

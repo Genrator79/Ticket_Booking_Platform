@@ -88,3 +88,4 @@ Adheres to DIP: Business services (`HoldService`, `BookingService`, `PaymentServ
 
 ### Q3: What happens if a user disconnects or experiences network jitter during a seat hold?
 > **Answer**: The socket connection drops and automatically attempts exponential backoff reconnection. However, the temporary seat hold itself is preserved in Redis with its active TTL lease. Upon reconnecting, the client re-joins the room and receives live state without losing their hold.
+

@@ -30,3 +30,4 @@ export interface ClientToServerEvents {
   'join:show': (payload: { showId: string }, callback?: (response: { success: boolean; room: string }) => void) => void;
   'leave:show': (payload: { showId: string }, callback?: (response: { success: boolean }) => void) => void;
 }
+
