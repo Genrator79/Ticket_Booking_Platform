@@ -3,6 +3,7 @@ import { mockPaymentProvider } from '../providers/payment/mock.provider.js';
 import { PaymentProvider } from '../providers/payment/payment.provider.js';
 import { BookingRepository, bookingRepository } from '../repositories/booking.repository.js';
 import { PaymentRepository, paymentRepository } from '../repositories/payment.repository.js';
+import { socketService, SocketService } from '../socket/socket.service.js';
 import { Payment, PaymentReceipt, ProcessPaymentDTO, RefundPaymentDTO } from '../types/payment.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 import { holdService, HoldService } from './hold.service.js';
@@ -12,7 +13,8 @@ export class PaymentService {
     private paymentRepo: PaymentRepository = paymentRepository,
     private bookingRepo: BookingRepository = bookingRepository,
     private holdSvc: HoldService = holdService,
-    private provider: PaymentProvider = mockPaymentProvider
+    private provider: PaymentProvider = mockPaymentProvider,
+    private socketSvc: SocketService = socketService
   ) {}
 
   /**
@@ -124,7 +126,13 @@ export class PaymentService {
       });
 
       if (hold_id) {
-        await this.holdSvc.releaseHold(hold_id, userId).catch(() => {});
+        await this.holdSvc.releaseHold(hold_id, userId, false).catch(() => {});
+      }
+
+      // Broadcast real-time seat booked event
+      const confirmedBooking = await this.bookingRepo.findById(targetBookingId!);
+      if (confirmedBooking) {
+        this.socketSvc.emitSeatBooked(confirmedBooking.show_id, seatIds, targetBookingId!);
       }
 
       return {
@@ -150,7 +158,13 @@ export class PaymentService {
       });
 
       if (hold_id) {
-        await this.holdSvc.releaseHold(hold_id, userId).catch(() => {});
+        await this.holdSvc.releaseHold(hold_id, userId, false).catch(() => {});
+      }
+
+      // Broadcast real-time seat released event (payment failed)
+      const failedBooking = await this.bookingRepo.findById(targetBookingId!);
+      if (failedBooking) {
+        this.socketSvc.emitSeatReleased(failedBooking.show_id, seatIds, 'payment_failed');
       }
 
       return {
@@ -210,6 +224,9 @@ export class PaymentService {
       await this.bookingRepo.updateBookingStatus(booking.id, 'CANCELLED', client);
       await this.bookingRepo.updateShowSeatsStatus(client, seatIds, 'AVAILABLE');
     });
+
+    // Broadcast real-time seat released event (refunded)
+    this.socketSvc.emitSeatReleased(booking.show_id, seatIds, 'manual');
 
     return {
       paymentId: payment.id,
@@ -304,6 +321,7 @@ export class PaymentService {
           if (booking) {
             const seatIds = booking.seats.map((s) => s.show_seat_id);
             await this.bookingRepo.updateShowSeatsStatus(client, seatIds, 'BOOKED');
+            this.socketSvc.emitSeatBooked(booking.show_id, seatIds, booking.id);
           }
         });
       }

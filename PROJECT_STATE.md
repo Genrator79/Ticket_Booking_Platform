@@ -4,13 +4,13 @@
 High-Concurrency Ticket Booking Platform (SeatForge)
 
 ## Current Milestone
-M10 — Idempotency
+M11 — Socket.IO and Real-Time Updates
 
 ## Milestone Status
 COMPLETED
 
 ## Current Task
-Milestone M10 finalized, verified, documented, committed, and awaiting explicit user approval before starting M11 (Socket.IO and Real-Time Updates).
+Milestone M11 finalized, verified, documented, committed, and awaiting explicit user approval before starting M12 (Background Jobs & BullMQ).
 
 ## Task Checklist
 - [x] M01 — Project Setup (Verified)
@@ -22,73 +22,69 @@ Milestone M10 finalized, verified, documented, committed, and awaiting explicit 
 - [x] M07 — Redis Infrastructure & Service Layer (Verified)
 - [x] M08 — Temporary Seat Holds (Verified)
 - [x] M09 — Payment Simulation (Verified)
-- [x] Create database migration `009_create_idempotency_keys_table.sql`
-- [x] Define idempotency interfaces and types in `server/src/types/idempotency.ts`
-- [x] Implement `IdempotencyRepository` in `server/src/repositories/idempotency.repository.ts`
-- [x] Implement `IdempotencyService` with canonical SHA-256 hashing, Redis in-flight locking, and Redis/PostgreSQL dual-tier caching
-- [x] Implement Express `idempotency()` middleware in `server/src/middleware/idempotency.middleware.ts`
-- [x] Attach idempotency middleware to `POST /api/bookings`, `POST /api/payments/process`, and `POST /api/holds`
-- [x] Update booking and payment services/controllers to persist `idempotency_key`
-- [x] Integrate client-side `Idempotency-Key` headers in `bookingService.ts`, `paymentService.ts`, and `MovieCatalog.tsx`
-- [x] Create integration test suite `server/tests/idempotency.test.ts` (6 tests)
-- [x] Verify full test suite (78/78 passed across 10 suites) and production monorepo build (0 errors)
-- [x] Document system design, architecture, and interview Q&A in `docs/milestones/M10-idempotency.md`
-- [x] Update `docs/solid/SOLID.md` and `PROJECT_LOG.md`
-- [x] Complete M10 verification and set awaiting approval
+- [x] M10 — Idempotency (Verified)
+- [x] Install `socket.io` in server and `socket.io-client` in client/server
+- [x] Define Socket.IO event types and interfaces in `server/src/types/socket.ts` and `client/src/types/socket.ts`
+- [x] Implement Socket.IO initialization and management in `server/src/socket/index.ts`
+- [x] Implement `SocketService` in `server/src/socket/socket.service.ts` for room broadcasting (`seat:held`, `seat:released`, `seat:booked`)
+- [x] Connect Socket.IO to HTTP server via `server/src/server.ts` and `server/src/index.ts`
+- [x] Integrate socket broadcasting into `HoldService` (on hold created, hold released, hold expired)
+- [x] Integrate socket broadcasting into `BookingService` (on booking confirmed)
+- [x] Integrate socket broadcasting into `PaymentService` (on payment confirmed, failed, refunded, and webhook)
+- [x] Implement client-side socket client in `client/src/services/socketService.ts` and proxy in `client/vite.config.ts`
+- [x] Integrate real-time room subscription and live seat grid sync in `client/src/components/MovieCatalog.tsx`
+- [x] Build comprehensive integration test suite `server/tests/socket.test.ts` (7 tests)
+- [x] Verify full test suite (85/85 passed across 11 suites) and production monorepo build (0 errors)
+- [x] Document architecture in `docs/milestones/M11-realtime-socket.md` and update `docs/solid/SOLID.md` and `PROJECT_LOG.md`
+- [x] Finalize M11 and await user approval for M12
 
 ## Verified Results
-- Automated Tests (`npm test`): PASS (78/78 tests passed across 10 test suites: `payment.test.ts`, `concurrency.test.ts`, `auth.test.ts`, `hold.test.ts`, `idempotency.test.ts`, `crud.test.ts`, `booking.test.ts`, `db.test.ts`, `health.test.ts`, `redis.test.ts`)
+- Automated Tests (`npm test`): PASS (85/85 tests passed across 11 test suites: `payment.test.ts`, `auth.test.ts`, `concurrency.test.ts`, `socket.test.ts`, `hold.test.ts`, `idempotency.test.ts`, `crud.test.ts`, `booking.test.ts`, `db.test.ts`, `health.test.ts`, `redis.test.ts`)
 - Production Monorepo Build (`npm run build`): PASS (Zero errors across client and server)
-- Dual-Tier Deduplication: PASS (Redis in-memory fast tier + PostgreSQL durable tier)
-- Canonical Payload Hashing: PASS (Key-sorted SHA-256 payload fingerprinting)
-- Payload Tampering Detection: PASS (Reusing key with altered payload triggers HTTP 422 Unprocessable Entity)
-- Concurrent In-Flight Mutual Exclusion: PASS (Overlapping requests trigger HTTP 409 Conflict)
-- Transparent Response Replay: PASS (Cached responses replayed identically with `Idempotent-Replayed: true` header)
-- End-to-End Client Header Integration: PASS (Client services transmit UUIDv4 `Idempotency-Key` headers on hold, booking, and payment actions)
+- Real-Time Room Multiplexing: PASS (Subscribing to `show:<show_id>` partitions events and prevents cross-show notification leakage)
+- Event Broadcasting: PASS (`seat:held`, `seat:released`, `seat:booked` dispatched across holds, bookings, payments, and refunds)
+- Client Live Grid Synchronization: PASS (React state dynamically transitions seat colors, recalculates available seats, and displays live sync pulse indicator)
+- Clean Teardown: PASS (Graceful socket closure during shutdown and tests with zero open handle warnings)
 
 ## Current Blockers
 None.
 
 ## Last Completed Action
-Verified all M10 Idempotency & Distributed Deduplication features, automated integration tests, production monorepo builds, documentation, and persistent tracking files.
+Verified all M11 Socket.IO & Real-Time Updates features, automated integration tests, production monorepo builds, documentation, and persistent tracking files.
 
 ## Exact Next Action
-Wait for explicit user approval to start M11 (Socket.IO and Real-Time Updates: WebSocket server setup, room-based broadcast for seat state changes, reconnect logic, client-side seat grid sync).
+Wait for explicit user approval to start M12 (Background Jobs & BullMQ: Redis-backed queue system, delayed job scheduling for seat hold auto-expiration, failed payment cleanup, email/notification stubs, worker processes).
 
 ## Files Changed
-- `database/migrations/009_create_idempotency_keys_table.sql`
-- `server/src/types/idempotency.ts`
-- `server/src/types/express.d.ts`
-- `server/src/types/booking.ts`
-- `server/src/repositories/idempotency.repository.ts`
-- `server/src/repositories/booking.repository.ts`
-- `server/src/services/idempotency.service.ts`
+- `package.json`
+- `package-lock.json`
+- `server/package.json`
+- `client/package.json`
+- `client/vite.config.ts`
+- `client/src/types/socket.ts`
+- `client/src/services/socketService.ts`
+- `client/src/components/MovieCatalog.tsx`
+- `server/src/types/socket.ts`
+- `server/src/socket/index.ts`
+- `server/src/socket/socket.service.ts`
+- `server/src/server.ts`
+- `server/src/index.ts`
+- `server/src/services/hold.service.ts`
 - `server/src/services/booking.service.ts`
 - `server/src/services/payment.service.ts`
-- `server/src/controllers/booking.controller.ts`
-- `server/src/controllers/payment.controller.ts`
-- `server/src/middleware/idempotency.middleware.ts`
-- `server/src/routes/booking.routes.ts`
-- `server/src/routes/payment.routes.ts`
-- `server/src/routes/hold.routes.ts`
-- `server/tests/idempotency.test.ts`
-- `client/src/types/booking.ts`
-- `client/src/services/bookingService.ts`
-- `client/src/services/paymentService.ts`
-- `client/src/components/MovieCatalog.tsx`
-- `docs/milestones/M10-idempotency.md`
+- `server/tests/socket.test.ts`
+- `docs/milestones/M11-realtime-socket.md`
 - `docs/solid/SOLID.md`
 - `PROJECT_STATE.md`
 - `PROJECT_LOG.md`
 
 ## Important Decisions
-- **Two-Tier Storage Strategy**: Redis provides sub-millisecond lookup and atomic in-flight locking (`SETNX` with 60-second TTL), while PostgreSQL durable table `idempotency_keys` ensures safety across Redis restarts or cache evictions.
-- **Canonical Payload Hashing**: Normalizing and recursively sorting JSON keys ensures that key ordering differences in request payloads do not trigger false-positive tampering errors.
-- **Transparent Middleware Interception**: Express middleware wraps `res.json` and `res.send` so controllers write standard responses without needing custom serialization logic.
-- **Header Standard Compliance**: Accepts both `Idempotency-Key` (IETF draft) and `X-Idempotency-Key` headers; returns `Idempotent-Replayed: true` on cache hits.
+- **Room-Based Isolation**: Clients subscribe to `show:<show_id>` rooms rather than receiving global broadcast storms, optimizing network bandwidth and client compute.
+- **Decoupled Event Dispatcher (DIP & SRP)**: Core domain services (`HoldService`, `BookingService`, `PaymentService`) interact through `SocketService`, maintaining loose coupling and allowing graceful degradation if sockets are uninitialized.
+- **Ephemeral Test Ports**: Server instance factory (`createServerInstance`) binds to port `0` in tests, eliminating port collisions during parallel or consecutive test runs.
 
 ## Next Milestone
-M11 — Socket.IO and Real-Time Updates
+M12 — Background Jobs & BullMQ
 
 ## Approval Status
 AWAITING_USER_APPROVAL: YES

@@ -4,13 +4,15 @@ import { getRedisClient } from '../redis/index.js';
 import { redisService } from '../redis/redis.service.js';
 import { bookingRepository, BookingRepository } from '../repositories/booking.repository.js';
 import { showRepository, ShowRepository } from '../repositories/show.repository.js';
+import { socketService, SocketService } from '../socket/socket.service.js';
 import { CreateHoldDTO, SeatHold } from '../types/hold.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 
 export class HoldService {
   constructor(
     private showRepo: ShowRepository = showRepository,
-    private bookingRepo: BookingRepository = bookingRepository
+    private bookingRepo: BookingRepository = bookingRepository,
+    private socketSvc: SocketService = socketService
   ) {}
 
   private get redis() {
@@ -126,6 +128,9 @@ export class HoldService {
     // 6. Store hold metadata in Redis with matching TTL
     await redisService.setJSON(this.getHoldKey(holdId), holdData, ttl);
 
+    // 7. Broadcast real-time seat hold event via WebSockets
+    this.socketSvc.emitSeatHeld(show_id, uniqueSeatIds, userId, expiresAt);
+
     return holdData;
   }
 
@@ -158,7 +163,7 @@ export class HoldService {
   /**
    * Releases an active seat hold immediately.
    */
-  async releaseHold(holdId: string, userId: string): Promise<void> {
+  async releaseHold(holdId: string, userId: string, emitEvent = true): Promise<void> {
     const holdKey = this.getHoldKey(holdId);
     const hold = await redisService.getJSON<SeatHold>(holdKey);
 
@@ -186,6 +191,42 @@ export class HoldService {
 
     await this.redis.eval(releaseLua, seatKeys.length, ...seatKeys, holdId);
     await redisService.del(holdKey);
+
+    if (emitEvent) {
+      this.socketSvc.emitSeatReleased(hold.showId, hold.showSeatIds, 'manual');
+    }
+  }
+
+  /**
+   * Internal hold release bypassing user ownership checks (for background jobs, expirations, or payment failure cleanups).
+   */
+  async releaseHoldInternal(
+    holdId: string,
+    reason: 'manual' | 'expired' | 'payment_failed' | 'payment_declined' = 'expired'
+  ): Promise<void> {
+    const holdKey = this.getHoldKey(holdId);
+    const hold = await redisService.getJSON<SeatHold>(holdKey);
+
+    if (!hold) {
+      return;
+    }
+
+    const seatKeys = hold.showSeatIds.map((seatId) => this.getSeatKey(hold.showId, seatId));
+
+    const releaseLua = `
+      for i = 1, #KEYS do
+        local val = redis.call('GET', KEYS[i])
+        if val and string.sub(val, 1, string.len(ARGV[1])) == ARGV[1] then
+          redis.call('DEL', KEYS[i])
+        end
+      end
+      return 1
+    `;
+
+    await this.redis.eval(releaseLua, seatKeys.length, ...seatKeys, holdId);
+    await redisService.del(holdKey);
+
+    this.socketSvc.emitSeatReleased(hold.showId, hold.showSeatIds, reason);
   }
 
   /**

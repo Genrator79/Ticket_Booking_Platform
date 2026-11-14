@@ -154,3 +154,20 @@
   - Verified production monorepo build succeeds cleanly (`npm run build`).
   - Created `docs/milestones/M10-idempotency.md` and updated `docs/solid/SOLID.md`.
 - **Status**: M10 Complete. All 78 tests passed. Production build clean. Awaiting user approval to proceed to M11 (Socket.IO and Real-Time Updates).
+
+### 2026-11-14 - Milestone M11: Socket.IO and Real-Time Updates Completed
+- **Milestone & Task**: M11 — Socket.IO and Real-Time Updates / Server Setup, Room Multiplexing, Event Dispatcher, Live Seat Grid Synchronization
+- **Action**:
+  - Installed `socket.io` (server) and `socket.io-client` (client and server devDependencies).
+  - Defined strict TypeScript event contracts in `server/src/types/socket.ts` and `client/src/types/socket.ts` for `seat:held`, `seat:released`, `seat:booked`, `join:show`, and `leave:show`.
+  - Implemented `server/src/socket/index.ts` with optional handshake JWT authentication, connection logging, room join/leave routing, and clean teardown helpers.
+  - Implemented `server/src/socket/socket.service.ts` with decoupled broadcasting methods (`emitSeatHeld`, `emitSeatReleased`, `emitSeatBooked`) targeting `show:<showId>` rooms.
+  - Created `server/src/server.ts` factory abstraction returning `{ app, httpServer, io }` and updated `server/src/index.ts` with graceful socket teardown.
+  - Injected `SocketService` into `HoldService` (broadcasting `seat:held` on hold creation and `seat:released` on hold cancellation/expiry), `BookingService` (broadcasting `seat:booked` on confirmed bookings), and `PaymentService` (broadcasting `seat:booked` on payment success/webhook and `seat:released` on card decline/refund).
+  - Built client singleton `client/src/services/socketService.ts` and updated Vite development proxy in `client/vite.config.ts` for `/socket.io`.
+  - Integrated real-time room synchronization in `client/src/components/MovieCatalog.tsx`: joins show rooms dynamically, processes incoming seat state updates, dynamically recalculates available seat counts, and displays a live pulse status indicator (`Live Sync Active`).
+  - Created comprehensive integration test suite `server/tests/socket.test.ts` (7 tests) covering guest/auth handshakes, room join/leave acknowledgments, hold broadcasts, release broadcasts, booking broadcasts, room-isolation boundaries, and payment lifecycle events.
+  - Verified full test suite passes (85/85 tests across 11 suites) in 2.5s with zero open handle leaks.
+  - Verified production monorepo build succeeds cleanly (`npm run build`).
+  - Created `docs/milestones/M11-realtime-socket.md` and updated `docs/solid/SOLID.md`.
+- **Status**: M11 Complete. All 85 tests passed. Production build clean. Awaiting user approval to proceed to M12 (Background Jobs & BullMQ).

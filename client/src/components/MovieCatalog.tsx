@@ -5,10 +5,16 @@ import { bookingService } from '../services/bookingService';
 import { holdService } from '../services/holdService';
 import { paymentService } from '../services/paymentService';
 import { authService } from '../services/authService';
+import { getSocket } from '../services/socketService';
 import type { Movie, Show, ShowSeat } from '../types/catalog';
 import type { BookingWithDetails } from '../types/booking';
 import type { SeatHold } from '../types/hold';
 import type { PaymentReceipt } from '../types/payment';
+import type {
+  SeatHeldEventPayload,
+  SeatReleasedEventPayload,
+  SeatBookedEventPayload,
+} from '../types/socket';
 
 export function MovieCatalog() {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -48,6 +54,106 @@ export function MovieCatalog() {
   const [loadingSeats, setLoadingSeats] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
+
+  // Real-time Socket.IO Connection State (M11)
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+
+  useEffect(() => {
+    const socket = getSocket();
+    setIsSocketConnected(socket.connected);
+
+    const onConnect = () => setIsSocketConnected(true);
+    const onDisconnect = () => setIsSocketConnected(false);
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, []);
+
+  // Real-time Show Room Subscription for Seat Updates (M11)
+  useEffect(() => {
+    if (!selectedShow) return;
+
+    const socket = getSocket();
+
+    // Join show room for targeted seat state broadcasts
+    socket.emit('join:show', { showId: selectedShow.id });
+
+    const handleSeatHeld = (payload: SeatHeldEventPayload) => {
+      if (payload.showId !== selectedShow.id) return;
+      setSeatLayout((prev) => {
+        if (!prev) return prev;
+        let newlyHeldCount = 0;
+        const updatedSeats = prev.seats.map((seat) => {
+          if (payload.seatIds.includes(seat.id)) {
+            if (seat.status === 'AVAILABLE') newlyHeldCount++;
+            return { ...seat, status: 'HELD' as const };
+          }
+          return seat;
+        });
+        return {
+          ...prev,
+          availableSeats: Math.max(0, prev.availableSeats - newlyHeldCount),
+          seats: updatedSeats,
+        };
+      });
+    };
+
+    const handleSeatReleased = (payload: SeatReleasedEventPayload) => {
+      if (payload.showId !== selectedShow.id) return;
+      setSeatLayout((prev) => {
+        if (!prev) return prev;
+        let releasedCount = 0;
+        const updatedSeats = prev.seats.map((seat) => {
+          if (payload.seatIds.includes(seat.id)) {
+            if (seat.status !== 'AVAILABLE') releasedCount++;
+            return { ...seat, status: 'AVAILABLE' as const };
+          }
+          return seat;
+        });
+        return {
+          ...prev,
+          availableSeats: prev.availableSeats + releasedCount,
+          seats: updatedSeats,
+        };
+      });
+    };
+
+    const handleSeatBooked = (payload: SeatBookedEventPayload) => {
+      if (payload.showId !== selectedShow.id) return;
+      setSeatLayout((prev) => {
+        if (!prev) return prev;
+        let newlyBookedFromAvailable = 0;
+        const updatedSeats = prev.seats.map((seat) => {
+          if (payload.seatIds.includes(seat.id)) {
+            if (seat.status === 'AVAILABLE') newlyBookedFromAvailable++;
+            return { ...seat, status: 'BOOKED' as const };
+          }
+          return seat;
+        });
+        return {
+          ...prev,
+          availableSeats: Math.max(0, prev.availableSeats - newlyBookedFromAvailable),
+          seats: updatedSeats,
+        };
+      });
+    };
+
+    socket.on('seat:held', handleSeatHeld);
+    socket.on('seat:released', handleSeatReleased);
+    socket.on('seat:booked', handleSeatBooked);
+
+    return () => {
+      socket.emit('leave:show', { showId: selectedShow.id });
+      socket.off('seat:held', handleSeatHeld);
+      socket.off('seat:released', handleSeatReleased);
+      socket.off('seat:booked', handleSeatBooked);
+    };
+  }, [selectedShow]);
 
   // Load movies on mount
   useEffect(() => {
@@ -468,9 +574,15 @@ export function MovieCatalog() {
 
                     {seatLayout && (
                       <div className="flex flex-wrap items-center gap-4 text-[11px]">
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700/60 text-[10px]">
+                          <span className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                          <span className={isSocketConnected ? 'text-emerald-300 font-medium' : 'text-slate-400'}>
+                            {isSocketConnected ? 'Live Sync Active' : 'Offline'}
+                          </span>
+                        </span>
                         <span className="flex items-center gap-1.5 text-emerald-400">
                           <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
-                          Available
+                          Available ({seatLayout.availableSeats})
                         </span>
                         <span className="flex items-center gap-1.5 text-indigo-400">
                           <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500"></span>

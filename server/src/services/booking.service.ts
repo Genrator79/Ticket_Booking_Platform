@@ -1,6 +1,7 @@
 import { withTransaction } from '../db/index.js';
 import { BookingRepository, bookingRepository } from '../repositories/booking.repository.js';
 import { ShowRepository, showRepository } from '../repositories/show.repository.js';
+import { socketService, SocketService } from '../socket/socket.service.js';
 import { BookingWithDetails, CreateBookingDTO } from '../types/booking.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 import { holdService, HoldService } from './hold.service.js';
@@ -9,7 +10,8 @@ export class BookingService {
   constructor(
     private repo: BookingRepository = bookingRepository,
     private showRepo: ShowRepository = showRepository,
-    private holdSvc: HoldService = holdService
+    private holdSvc: HoldService = holdService,
+    private socketSvc: SocketService = socketService
   ) {}
 
   /**
@@ -104,9 +106,9 @@ export class BookingService {
       return booking;
     });
 
-    // Clean up temporary hold from Redis if booking succeeded from hold
+    // Clean up temporary hold from Redis if booking succeeded from hold (silently, without emitting seat:released)
     if (holdId) {
-      await this.holdSvc.releaseHold(holdId, userId).catch((err) => {
+      await this.holdSvc.releaseHold(holdId, userId, false).catch((err) => {
         console.error(`[Hold Cleanup Warning] Failed to release hold ${holdId} after booking:`, err.message);
       });
     }
@@ -115,6 +117,9 @@ export class BookingService {
     if (!fullBooking) {
       throw new NotFoundError('Failed to retrieve finalized booking details');
     }
+
+    // Broadcast real-time seat booked event
+    this.socketSvc.emitSeatBooked(showId, uniqueSeatIds, fullBooking.id);
 
     return fullBooking;
   }
